@@ -56,7 +56,9 @@ const uploadSingle = multer({ storage: memoryStorage, limits: { fileSize: 5 * 10
 const uploadMultiple = multer({ storage: memoryStorage, limits: { fileSize: 5 * 1024 * 1024, files: 10 } }).array('files', 10);
 
 // Upload single file to Cloudinary
-router.post('/upload', authMiddleware, uploadSingle, cloudinaryController.uploadFile);
+// Accept any field name (file, image, photo, avatar, etc.) for better compatibility
+const uploadAny = multer({ storage: memoryStorage, limits: { fileSize: 5 * 1024 * 1024 } }).any();
+router.post('/upload', authMiddleware, uploadAny, cloudinaryController.uploadFile);
 
 // Upload multiple files to Cloudinary (max 10)
 router.post('/upload-multiple', authMiddleware, uploadMultiple, cloudinaryController.uploadMultipleFiles);

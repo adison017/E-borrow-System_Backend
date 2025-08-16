@@ -20,7 +20,7 @@ export const roomModel = {
           room_code VARCHAR(20) UNIQUE,
           address TEXT,
           detail TEXT,
-          image_url VARCHAR(255),
+          image_url TEXT,
           note TEXT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

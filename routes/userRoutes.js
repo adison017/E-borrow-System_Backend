@@ -140,10 +140,20 @@ router.post('/upload-image', authMiddleware, async (req, res, next) => {
         const result = await uploadUserAvatar(dataUri, user_code);
 
         if (result.success) {
+          // Save avatar URL to DB
+          let saved = false;
+          try {
+            const updateRes = await User.updateByUserCode(user_code, { avatar: result.url });
+            saved = !!updateRes && updateRes.affectedRows > 0;
+          } catch (saveErr) {
+            console.error('Failed to save avatar URL to DB:', saveErr);
+          }
+
           res.json({
             filename: result.public_id,
             url: result.url,
-            public_id: result.public_id
+            public_id: result.public_id,
+            saved
           });
         } else {
           res.status(400).json({
@@ -279,7 +289,7 @@ router.post('/auth/refresh', async (req, res) => {
     else if (user.role_name && user.role_name.toLowerCase().includes('executive')) role = 'executive';
 
     // ออก access token ใหม่ (มี role/username) และ rotate refresh token ใหม่ทุกครั้ง
-    const access = jwt.sign({ user_id: user.user_id, username: user.username, role }, process.env.JWT_SECRET, { expiresIn: '15m' });
+    const access = jwt.sign({ user_id: user.user_id, username: user.username, role }, process.env.JWT_SECRET, { expiresIn: '45m' });
     const newRefresh = jwt.sign({ user_id: payload.user_id, tokenId: crypto.randomUUID() }, process.env.REFRESH_SECRET || (process.env.JWT_SECRET + '_refresh'), { expiresIn: '7d' });
 
     res.cookie('refresh_token', newRefresh, {

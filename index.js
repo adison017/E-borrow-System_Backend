@@ -78,6 +78,24 @@ const io = new SocketIOServer(server, {
 const socketSessions = new Map(); // เก็บ socket sessions
 const userSockets = new Map(); // เก็บ user_id -> socket mapping
 
+// Handshake authentication middleware
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake?.auth?.token;
+    if (!token) {
+      return next(new Error('Token required'));
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return next(new Error('Invalid token'));
+    }
+    socket.data.user = decoded;
+    return next();
+  } catch (err) {
+    return next(new Error('Authentication error'));
+  }
+});
+
 // ฟังก์ชัน broadcast badgeCountsUpdated
 export function broadcastBadgeCounts(badges) {
   io.emit('badgeCountsUpdated', badges);
@@ -125,73 +143,63 @@ function verifyToken(token) {
 
 io.on('connection', async (socket) => {
   console.log('Socket connected:', socket.id);
-  
-  // ตรวจสอบ authentication
-  socket.on('authenticate', async (data) => {
-    try {
-      const { token } = data;
-      if (!token) {
-        socket.emit('auth_error', { message: 'Token required' });
-        socket.disconnect();
-        return;
-      }
-      
-      const decoded = verifyToken(token);
-      if (!decoded) {
-        socket.emit('auth_error', { message: 'Invalid token' });
-        socket.disconnect();
-        return;
-      }
-      
-      // บันทึก session
-      const session = {
-        userId: decoded.user_id,
-        username: decoded.username,
-        role: decoded.role,
-        deviceFingerprint: decoded.deviceFingerprint,
-        loginTime: decoded.loginTime,
-        connectedAt: Date.now()
-      };
-      
-      socketSessions.set(socket.id, session);
-      
-      // เพิ่ม socket ไปยัง user mapping
-      if (!userSockets.has(decoded.user_id)) {
-        userSockets.set(decoded.user_id, new Set());
-      }
-      userSockets.get(decoded.user_id).add(socket.id);
-      
-      console.log(`User authenticated: ${decoded.username} (${decoded.user_id}) on socket: ${socket.id}`);
-      
-      // ส่งข้อมูล badge counts เริ่มต้น
-      try {
-        const [pending, carry, pendingApproval] = await Promise.all([
-          BorrowModel.getBorrowsByStatus(['pending']),
-          BorrowModel.getBorrowsByStatus(['carry']),
-          BorrowModel.getBorrowsByStatus(['pending_approval'])
-        ]);
-        const allRepairs = await RepairRequest.getAllRepairRequests();
-        const repairApprovalCount = allRepairs.length;
-        
-        socket.emit('badgeCountsUpdated', {
-          pendingCount: pending.length + pendingApproval.length,
-          carryCount: carry.length,
-          borrowApprovalCount: pendingApproval.length,
-          repairApprovalCount
-        });
-        
-        socket.emit('auth_success', { message: 'Authentication successful' });
-      } catch (err) {
-        console.error('Error sending initial badge counts:', err);
-        socket.emit('auth_error', { message: 'Error loading data' });
-      }
-      
-    } catch (error) {
-      console.error('Socket authentication error:', error);
-      socket.emit('auth_error', { message: 'Authentication failed' });
+
+  // ตั้งค่าหลังผ่าน handshake auth แล้ว
+  try {
+    const decoded = socket.data.user;
+    if (!decoded) {
+      socket.emit('auth_error', { message: 'Authentication required' });
       socket.disconnect();
+      return;
     }
-  });
+
+    // บันทึก session
+    const session = {
+      userId: decoded.user_id,
+      username: decoded.username,
+      role: decoded.role,
+      deviceFingerprint: decoded.deviceFingerprint,
+      loginTime: decoded.loginTime,
+      connectedAt: Date.now()
+    };
+
+    socketSessions.set(socket.id, session);
+
+    // เพิ่ม socket ไปยัง user mapping
+    if (!userSockets.has(decoded.user_id)) {
+      userSockets.set(decoded.user_id, new Set());
+    }
+    userSockets.get(decoded.user_id).add(socket.id);
+
+    console.log(`User authenticated: ${decoded.username} (${decoded.user_id}) on socket: ${socket.id}`);
+
+    // ส่งข้อมูล badge counts เริ่มต้น
+    try {
+      const [pending, carry, pendingApproval] = await Promise.all([
+        BorrowModel.getBorrowsByStatus(['pending']),
+        BorrowModel.getBorrowsByStatus(['carry']),
+        BorrowModel.getBorrowsByStatus(['pending_approval'])
+      ]);
+      const allRepairs = await RepairRequest.getAllRepairRequests();
+      const repairApprovalCount = allRepairs.length;
+
+      socket.emit('badgeCountsUpdated', {
+        pendingCount: pending.length + pendingApproval.length,
+        carryCount: carry.length,
+        borrowApprovalCount: pendingApproval.length,
+        repairApprovalCount
+      });
+
+      socket.emit('auth_success', { message: 'Authentication successful' });
+    } catch (err) {
+      console.error('Error sending initial badge counts:', err);
+      socket.emit('auth_error', { message: 'Error loading data' });
+    }
+  } catch (error) {
+    console.error('Post-auth setup error:', error);
+    socket.disconnect();
+    return;
+  }
   
   // จัดการ disconnect
   socket.on('disconnect', (reason) => {
@@ -209,15 +217,6 @@ io.on('connection', async (socket) => {
   socket.on('ping', () => {
     socket.emit('pong', { timestamp: Date.now() });
   });
-  
-  // ตรวจสอบ session หลังจาก 30 วินาที
-  setTimeout(() => {
-    const session = socketSessions.get(socket.id);
-    if (!session) {
-      console.log(`Socket ${socket.id} not authenticated, disconnecting...`);
-      socket.disconnect();
-    }
-  }, 30000);
 });
 
 // Cleanup sessions ทุก 5 นาที

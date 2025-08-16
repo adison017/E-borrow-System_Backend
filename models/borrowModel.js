@@ -343,7 +343,7 @@ export const getActiveBorrows = async () => {
     `SELECT bt.borrow_id, bt.borrow_code, bt.borrow_date, bt.return_date, u.line_id
      FROM borrow_transactions bt
      JOIN users u ON bt.user_id = u.user_id
-     WHERE bt.status = 'approved'`
+     WHERE bt.status IN ('approved','carry')`
   );
   return rows;
 };

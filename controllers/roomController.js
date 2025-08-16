@@ -97,7 +97,23 @@ export const roomController = {
   getAllRooms: async (req, res) => {
     try {
       const rooms = await roomModel.getAllRooms();
-      res.json(rooms);
+      const mappedRooms = rooms.map((room) => {
+        let imageUrls = [];
+        if (room.image_url) {
+          try {
+            const parsed = JSON.parse(room.image_url);
+            imageUrls = Array.isArray(parsed) ? parsed : [room.image_url];
+          } catch {
+            imageUrls = [room.image_url];
+          }
+        }
+        return {
+          ...room,
+          image_urls: imageUrls,
+          thumbnail_url: imageUrls[0] || null
+        };
+      });
+      res.json(mappedRooms);
     } catch (error) {
       console.error('Error in getAllRooms:', error);
       res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลห้อง' });
@@ -114,7 +130,21 @@ export const roomController = {
         return res.status(404).json({ message: 'ไม่พบข้อมูลห้อง' });
       }
 
-      res.json(room);
+      let imageUrls = [];
+      if (room.image_url) {
+        try {
+          const parsed = JSON.parse(room.image_url);
+          imageUrls = Array.isArray(parsed) ? parsed : [room.image_url];
+        } catch {
+          imageUrls = [room.image_url];
+        }
+      }
+
+      res.json({
+        ...room,
+        image_urls: imageUrls,
+        thumbnail_url: imageUrls[0] || null
+      });
     } catch (error) {
       console.error('Error in getRoomById:', error);
       res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลห้อง' });
@@ -131,7 +161,21 @@ export const roomController = {
         return res.status(404).json({ message: 'ไม่พบข้อมูลห้อง' });
       }
 
-      res.json(room);
+      let imageUrls = [];
+      if (room.image_url) {
+        try {
+          const parsed = JSON.parse(room.image_url);
+          imageUrls = Array.isArray(parsed) ? parsed : [room.image_url];
+        } catch {
+          imageUrls = [room.image_url];
+        }
+      }
+
+      res.json({
+        ...room,
+        image_urls: imageUrls,
+        thumbnail_url: imageUrls[0] || null
+      });
     } catch (error) {
       console.error('Error in getRoomByCode:', error);
       res.status(500).json({ message: 'เกิดข้อผิดพลาดในการดึงข้อมูลห้อง' });
