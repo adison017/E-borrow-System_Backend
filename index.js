@@ -262,7 +262,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 // Parse cookies for refresh token handling
 app.use(cookieParser());
