@@ -244,14 +244,25 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// Enable CORS with specific options
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+// Enable CORS with specific options (allow only configured frontend origins)
+const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // non-browser or same-origin
+    if (configuredOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['Content-Length', 'X-Requested-With'],
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Parse cookies for refresh token handling
 app.use(cookieParser());
@@ -336,7 +347,7 @@ app.use(express.json());
 
 // Serve static files from uploads directory with proper MIME types
 // Apply CORS before static serving
-app.use('/uploads', cors(), express.static(path.join(__dirname, '/uploads'), {
+app.use('/uploads', cors(corsOptions), express.static(path.join(__dirname, '/uploads'), {
   setHeaders: (res, path) => {
     const ext = path.split('.').pop().toLowerCase();
 
@@ -425,7 +436,11 @@ app.use('/api/dashboard', dashboardRoutes);
 
 // Root route
 app.get('/', (req, res) => {
-  res.send('สวัสดี Express API');
+  res.json({
+    message: 'E-borrow API running',
+    cors_allowed_origins: configuredOrigins,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Error handling middleware
@@ -473,8 +488,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, async () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log('CORS enabled for: http://localhost:5173, http://127.0.0.1:5173');
+  console.log(`Server running on port ${PORT}`);
+  if (configuredOrigins.length > 0) {
+    console.log('CORS enabled for origins:', configuredOrigins.join(', '));
+  } else {
+    console.log('CORS configured but no FRONTEND_URL(S) set. Set FRONTEND_URL or FRONTEND_URLS env.');
+  }
   console.log('Socket.IO server started');
 
   // Initialize database tables after server starts
