@@ -66,9 +66,26 @@ server = http.createServer(app);
 //   server = http.createServer(app);
 // }
 
+// Centralized CORS configuration
+const defaultDevOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOrigins]));
+
+function isOriginAllowed(origin) {
+  if (!origin) return true; // non-browser or same-origin
+  return allowedOrigins.includes(origin);
+}
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true
   }
@@ -245,15 +262,9 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // Enable CORS with specific options (allow only configured frontend origins)
-const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // non-browser or same-origin
-    if (configuredOrigins.includes(origin)) return callback(null, true);
+    if (isOriginAllowed(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
