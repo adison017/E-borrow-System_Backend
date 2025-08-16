@@ -1,0 +1,11 @@
+node_modules/
+uploads/
+tmp/
+logs/
+*.log
+.env
+.env.*
+.vscode/
+coverage/
+.DS_Store
+Thumbs.db
