@@ -27,37 +27,8 @@ router.post('/verify-otp', userController.verifyPasswordOtp);
 // เปลี่ยนรหัสผ่าน (reset password)
 router.post('/reset-password', userController.resetPassword);
 
-// CORS middleware
-router.use((req, res, next) => {
-  const allowedOrigins = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-  ];
-
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-
-  // Allow specific methods
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-
-  // Allow specific headers
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin');
-
-  // Allow credentials
-  res.header('Access-Control-Allow-Credentials', 'true');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Max-Age', '86400'); // 24 hours
-    return res.status(204).end();
-  }
-
-  next();
-});
+// CORS middleware - Removed to avoid conflicts with main CORS configuration
+// The main CORS configuration in index.js handles all CORS requirements
 
 // Debug middleware to log all requests
 router.use((req, res, next) => {
@@ -228,7 +199,29 @@ router.get('/id/:id', userController.getUserById);
 router.post('/', userController.createUser);
 router.put('/id/:id', authMiddleware, userController.updateUser);
 router.patch('/id/:id', authMiddleware, userController.updateUser);
-router.patch('/:id/line-notify', userController.updateLineNotifyEnabled);
+// OPTIONS handler for line-notify route to satisfy CORS preflight
+router.options('/:id/line-notify', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  const reqHeaders = req.headers['access-control-request-headers'];
+  res.header('Access-Control-Allow-Headers', reqHeaders || 'Authorization, Content-Type, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
+});
+
+// Add CORS headers for line-notify route
+router.patch('/:id/line-notify', authMiddleware, (req, res, next) => {
+  // Set CORS headers
+  res.header('Access-Control-Allow-Origin', req.headers.origin);
+  res.header('Access-Control-Allow-Methods', 'PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+}, userController.updateLineNotifyEnabled);
 router.delete('/id/:id', authMiddleware, async (req, res) => {
   try {
     // Get user info first

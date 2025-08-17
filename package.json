@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "dev:debug": "nodemon --inspect index.js",
     "create-cloudinary-folders": "node scripts/create-cloudinary-folders.js",
     "upload-local-images": "node scripts/upload-local-images-to-cloudinary.js",
     "check-local-images": "node scripts/check-local-images.js",

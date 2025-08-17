@@ -32,25 +32,25 @@ if (!JWT_SECRET || JWT_SECRET === 'your_jwt_secret_key') {
 // Helper function สำหรับสร้าง device fingerprint
 function generateDeviceFingerprint(req) {
   const userAgent = req.headers['user-agent'] || '';
-  
+
   // แก้ไขการดึง IP Address ให้ถูกต้อง
   let ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
-  
+
   // แปลง IPv6 localhost เป็น IPv4
   if (ip === '::1' || ip === '::ffff:127.0.0.1') {
     ip = '127.0.0.1 (localhost)';
   } else if (ip.startsWith('::ffff:')) {
     ip = ip.replace('::ffff:', '');
   }
-  
+
   const acceptLanguage = req.headers['accept-language'] || '';
   const acceptEncoding = req.headers['accept-encoding'] || '';
-  
+
   const fingerprint = crypto
     .createHash('sha256')
     .update(`${userAgent}${ip}${acceptLanguage}${acceptEncoding}`)
     .digest('hex');
-    
+
   return {
     fingerprint,
     userAgent,
@@ -63,18 +63,18 @@ function generateDeviceFingerprint(req) {
 function checkLoginAttempts(username, ip) {
   const key = `${username}:${ip}`;
   const attempts = loginAttempts.get(key) || { count: 0, lastAttempt: 0, blockedUntil: 0 };
-  
+
   // ตรวจสอบว่าถูกบล็อกหรือไม่
   if (attempts.blockedUntil > Date.now()) {
     const remainingTime = Math.ceil((attempts.blockedUntil - Date.now()) / 1000 / 60);
     throw new Error(`บัญชีถูกบล็อกชั่วคราว กรุณาลองใหม่ใน ${remainingTime} นาที`);
   }
-  
+
   // รีเซ็ตถ้าผ่านไป 15 นาทีแล้ว
   if (Date.now() - attempts.lastAttempt > 15 * 60 * 1000) {
     attempts.count = 0;
   }
-  
+
   return attempts;
 }
 
@@ -82,7 +82,7 @@ function checkLoginAttempts(username, ip) {
 function updateLoginAttempts(username, ip, success = false) {
   const key = `${username}:${ip}`;
   const attempts = loginAttempts.get(key) || { count: 0, lastAttempt: 0, blockedUntil: 0 };
-  
+
   if (success) {
     // รีเซ็ตเมื่อ login สำเร็จ
     loginAttempts.delete(key);
@@ -90,12 +90,12 @@ function updateLoginAttempts(username, ip, success = false) {
     // เพิ่มจำนวนครั้งที่ผิด
     attempts.count += 1;
     attempts.lastAttempt = Date.now();
-    
+
     // บล็อกถ้าผิด 5 ครั้ง
     if (attempts.count >= 5) {
       attempts.blockedUntil = Date.now() + (15 * 60 * 1000); // บล็อก 15 นาที
     }
-    
+
     loginAttempts.set(key, attempts);
   }
 }
@@ -108,7 +108,7 @@ async function getContactInfo() {
     hours: 'จันทร์-ศุกร์ 8:30-16:30 น.',
     location: 'คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม'
   };
-  
+
   try {
     const ContactInfoModel = await import('../models/contactInfoModel.js');
     const result = await ContactInfoModel.getContactInfo();
@@ -125,7 +125,7 @@ async function getContactInfo() {
     console.error('Error fetching contact info:', error);
     // ใช้ค่าเริ่มต้นหากเกิด error
   }
-  
+
   return defaultContactInfo;
 }
 
@@ -143,7 +143,7 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
       second: '2-digit',
       timeZone: 'Asia/Bangkok'
     });
-    
+
     // แยก User Agent ให้อ่านง่ายขึ้น
     const userAgent = deviceInfo.userAgent;
     const browserInfo = userAgent.includes('Chrome') ? 'Google Chrome' :
@@ -151,23 +151,23 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
                        userAgent.includes('Safari') ? 'Safari' :
                        userAgent.includes('Edge') ? 'Microsoft Edge' :
                        userAgent.includes('Opera') ? 'Opera' : 'Unknown Browser';
-    
+
     const osInfo = userAgent.includes('Windows') ? 'Windows' :
                    userAgent.includes('Mac') ? 'macOS' :
                    userAgent.includes('Linux') ? 'Linux' :
                    userAgent.includes('Android') ? 'Android' :
                    userAgent.includes('iOS') ? 'iOS' : 'Unknown OS';
-    
+
     const deviceInfoText = `
       🌐 เบราว์เซอร์: ${browserInfo}
       💻 ระบบปฏิบัติการ: ${osInfo}
       📍 IP Address: ${deviceInfo.ip}
       🕐 เวลา: ${currentTime}
     `;
-    
+
     // ดึงข้อมูลติดต่อจาก API
     const contactInfo = await getContactInfo();
-    
+
     const emailHtml = `
       <!DOCTYPE html>
       <html lang="th">
@@ -333,24 +333,24 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
             <h1 class="title">ระบบยืม-คืนครุภัณฑ์</h1>
             <p class="subtitle">คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม</p>
           </div>
-          
+
           <div class="greeting">
             สวัสดี <strong>${user.Fullname}</strong>
           </div>
-          
+
           <div class="alert-box">
             <div class="alert-icon">⚠️ แจ้งเตือนความปลอดภัย</div>
             <h2 style="color: #856404; margin-top: 20px;">
               ${isNewDevice ? '🔍 ตรวจพบการเข้าสู่ระบบจากอุปกรณ์ใหม่' : '🔐 การเข้าสู่ระบบสำเร็จ'}
             </h2>
             <p style="color: #856404; margin: 15px 0;">
-              ${isNewDevice ? 
+              ${isNewDevice ?
                 'เราได้ตรวจพบการเข้าสู่ระบบจากอุปกรณ์ที่ไม่เคยใช้กับบัญชีนี้มาก่อน หากไม่ใช่คุณ กรุณาติดต่อผู้ดูแลระบบทันที' :
                 'บัญชีของคุณได้เข้าสู่ระบบสำเร็จ หากไม่ใช่คุณ กรุณาติดต่อผู้ดูแลระบบทันที'
               }
             </p>
           </div>
-          
+
           <div class="device-info">
             <h3 style="color: #495057; margin-top: 0; border-bottom: 2px solid #007bff; padding-bottom: 10px;">
               📊 รายละเอียดการเข้าสู่ระบบ
@@ -376,7 +376,7 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
               <span class="info-value">${currentTime}</span>
             </div>
           </div>
-          
+
           ${isNewDevice ? `
           <div class="warning-box">
             <div class="warning-icon">🚨</div>
@@ -386,7 +386,7 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
             </p>
           </div>
           ` : ''}
-          
+
           <div class="contact-info">
             <h4 style="color: #495057; margin: 0 0 10px 0;">📞 ติดต่อผู้ดูแลระบบ</h4>
             <p style="margin: 5px 0;">
@@ -395,12 +395,12 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
               <strong>เวลาทำการ:</strong> ${contactInfo.hours}
             </p>
           </div>
-          
+
           <div style="text-align: center; margin: 25px 0;">
             <a href="mailto:${contactInfo.email}" class="btn">📧 ติดต่อผู้ดูแลระบบ</a>
             <a href="https://it.msu.ac.th" class="btn">🌐 ไปยังเว็บไซต์</a>
           </div>
-          
+
           <div class="footer">
             <p>📧 อีเมลนี้ถูกส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ</p>
             <p>🔒 ข้อมูลของคุณได้รับการปกป้องตามมาตรฐานความปลอดภัย</p>
@@ -413,7 +413,7 @@ async function sendLoginNotification(user, deviceInfo, isNewDevice = false) {
       </body>
       </html>
     `;
-    
+
     const emailText = `
 🔐 แจ้งเตือนความปลอดภัย: ระบบยืม-คืนครุภัณฑ์
 คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
@@ -424,7 +424,7 @@ ${isNewDevice ? '🔍 ตรวจพบการเข้าสู่ระบ�
 
 ${deviceInfoText}
 
-${isNewDevice ? 
+${isNewDevice ?
   '⚠️  หากไม่ใช่คุณ กรุณาติดต่อผู้ดูแลระบบทันทีเพื่อความปลอดภัยของบัญชี' :
   '✅ การเข้าสู่ระบบสำเร็จ หากไม่ใช่คุณ กรุณาติดต่อผู้ดูแลระบบทันที'
 }
@@ -440,7 +440,7 @@ ${isNewDevice ?
 © 2025 คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
 ระบบยืม-คืนครุภัณฑ์ | เวอร์ชัน 1.0.0
     `;
-    
+
     await sendMail({
       to: user.email,
       subject: subject,
@@ -465,7 +465,7 @@ async function requestRegisterOtp(req, res) {
     registerOtpStore.set(contact, { otp, expires: Date.now() + 5 * 60 * 1000 });
     // ดึงข้อมูลติดต่อจาก API
     const contactInfo = await getContactInfo();
-    
+
     // ส่งอีเมล
     const brandLogo = '';
     const emailHtml = `
@@ -577,9 +577,9 @@ async function requestRegisterOtp(req, res) {
             <h1 class="title">ระบบยืม-คืนครุภัณฑ์</h1>
             <p class="subtitle">คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม</p>
           </div>
-          
+
           <h2 style="color: #495057; text-align: center;">🔐 ยืนยันการสมัครสมาชิก</h2>
-          
+
           <div class="otp-box">
             <h3 style="color: #155724; margin: 0 0 15px 0;">รหัส OTP ของคุณ</h3>
             <div class="otp-code">${otp}</div>
@@ -587,7 +587,7 @@ async function requestRegisterOtp(req, res) {
               รหัสนี้จะหมดอายุใน 5 นาที
             </p>
           </div>
-          
+
           <div class="info-box">
             <h4 style="color: #495057; margin: 0 0 15px 0;">📋 วิธีการใช้งาน</h4>
             <ol style="color: #6c757d; margin: 0; padding-left: 20px;">
@@ -597,7 +597,7 @@ async function requestRegisterOtp(req, res) {
               <li>กดปุ่ม "ยืนยัน" เพื่อดำเนินการต่อ</li>
             </ol>
           </div>
-          
+
           <div class="warning-box">
             <h4 style="color: #856404; margin: 0 0 10px 0;">⚠️ ข้อควรระวัง</h4>
             <p style="color: #856404; margin: 0;">
@@ -606,7 +606,7 @@ async function requestRegisterOtp(req, res) {
               • หากไม่ใช่คุณ กรุณาละเว้นการใช้งาน
             </p>
           </div>
-          
+
           <div class="contact-info">
             <h4 style="color: #495057; margin: 0 0 10px 0;">📞 ติดต่อผู้ดูแลระบบ</h4>
             <p style="margin: 5px 0;">
@@ -615,7 +615,7 @@ async function requestRegisterOtp(req, res) {
               <strong>เวลาทำการ:</strong> ${contactInfo.hours}
             </p>
           </div>
-          
+
           <div class="footer">
             <p>📧 อีเมลนี้ถูกส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ</p>
             <p>🔒 ข้อมูลของคุณได้รับการปกป้องตามมาตรฐานความปลอดภัย</p>
@@ -628,7 +628,7 @@ async function requestRegisterOtp(req, res) {
       </body>
       </html>
     `;
-    
+
     const emailText = `
 📧 OTP สำหรับสมัครสมาชิก: ระบบยืม-คืนครุภัณฑ์
 คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
@@ -661,7 +661,7 @@ async function requestRegisterOtp(req, res) {
 © 2025 คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
 ระบบยืม-คืนครุภัณฑ์ | เวอร์ชัน 1.0.0
     `;
-    
+
     await sendMail({
       to: contact,
       subject: '📧 OTP สำหรับยืนยันการสมัครสมาชิก - ระบบยืม-คืนครุภัณฑ์',
@@ -822,10 +822,10 @@ const userController = {
       // สร้าง otp 6 หลัก
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       otpStore.set(email, { otp, expires: Date.now() + 5 * 60 * 1000 });
-      
+
       // ดึงข้อมูลติดต่อจาก API
       const contactInfo = await getContactInfo();
-      
+
       // ส่งอีเมล
       const emailHtml = `
       <!DOCTYPE html>
@@ -845,7 +845,7 @@ const userController = {
             padding: 0;
             background-color: #f8fafc;
           }
-          
+
           /* Container */
           .container {
             background: white;
@@ -855,7 +855,7 @@ const userController = {
             border: 1px solid #e0e7ff;
             overflow: hidden;
           }
-          
+
           /* Header */
           .header {
             background: linear-gradient(135deg, #1e3a8a, #2563eb);
@@ -864,7 +864,7 @@ const userController = {
             text-align: center;
             border-bottom: 5px solid #3b82f6;
           }
-          
+
           .logo {
             width: 80px;
             height: 80px;
@@ -879,25 +879,25 @@ const userController = {
             font-weight: bold;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           }
-          
+
           .title {
             color: white;
             font-size: 24px;
             font-weight: bold;
             margin: 0;
           }
-          
+
           .subtitle {
             color: rgba(255, 255, 255, 0.9);
             font-size: 16px;
             margin: 10px 0 0 0;
           }
-          
+
           /* Content */
           .content {
             padding: 30px;
           }
-          
+
           /* OTP Box */
           .otp-box {
             background: #f0f7ff;
@@ -907,7 +907,7 @@ const userController = {
             margin: 25px 0;
             text-align: center;
           }
-          
+
           .otp-code {
             font-size: 42px;
             font-weight: bold;
@@ -921,7 +921,7 @@ const userController = {
             display: inline-block;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
           }
-          
+
           /* Info Box */
           .info-box {
             background: #f8fafc;
@@ -930,24 +930,24 @@ const userController = {
             padding: 20px;
             margin: 20px 0;
           }
-          
+
           .info-box h4 {
             color: #1e3a8a;
             margin-top: 0;
             border-bottom: 2px solid #e0e7ff;
             padding-bottom: 10px;
           }
-          
+
           .info-box ol {
             color: #4b5563;
             margin: 0;
             padding-left: 20px;
           }
-          
+
           .info-box li {
             margin-bottom: 8px;
           }
-          
+
           /* Warning Box */
           .warning-box {
             background: #fff7ed;
@@ -956,17 +956,17 @@ const userController = {
             padding: 20px;
             margin: 25px 0;
           }
-          
+
           .warning-box h4 {
             color: #9a3412;
             margin-top: 0;
           }
-          
+
           .warning-box p {
             color: #9a3412;
             margin: 0;
           }
-          
+
           /* Contact Info */
           .contact-info {
             background: #f0f7ff;
@@ -974,12 +974,12 @@ const userController = {
             padding: 20px;
             margin: 25px 0;
           }
-          
+
           .contact-info h4 {
             color: #1e3a8a;
             margin-top: 0;
           }
-          
+
           /* Footer */
           .footer {
             text-align: center;
@@ -989,17 +989,17 @@ const userController = {
             color: #64748b;
             font-size: 14px;
           }
-          
+
           /* Responsive */
           @media (max-width: 480px) {
             .container {
               border-radius: 0;
             }
-            
+
             .content {
               padding: 20px;
             }
-            
+
             .otp-code {
               font-size: 32px;
               letter-spacing: 5px;
@@ -1014,10 +1014,10 @@ const userController = {
             <h1 class="title">ระบบยืม-คืนครุภัณฑ์</h1>
             <p class="subtitle">คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม</p>
           </div>
-          
+
           <div class="content">
             <h2 style="color: #1e3a8a; text-align: center; margin-top: 0;">🔐 ยืนยันการสมัครสมาชิก</h2>
-            
+
             <div class="otp-box">
               <h3 style="color: #1e3a8a; margin: 0 0 15px 0;">รหัส OTP ของคุณ</h3>
               <div class="otp-code">${otp}</div>
@@ -1025,7 +1025,7 @@ const userController = {
                 ⏰ รหัสนี้จะหมดอายุใน 5 นาที
               </p>
             </div>
-            
+
             <div class="info-box">
               <h4>📋 วิธีการใช้งาน</h4>
               <ol>
@@ -1035,7 +1035,7 @@ const userController = {
                 <li>กดปุ่ม "ยืนยัน" เพื่อดำเนินการต่อ</li>
               </ol>
             </div>
-            
+
             <div class="warning-box">
               <h4>⚠️ ข้อควรระวัง</h4>
               <p>
@@ -1044,7 +1044,7 @@ const userController = {
                 • หากไม่ใช่คุณ กรุณาละเว้นการใช้งาน
               </p>
             </div>
-            
+
             <div class="contact-info">
               <h4>📞 ติดต่อผู้ดูแลระบบ</h4>
               <p style="margin: 5px 0;">
@@ -1054,7 +1054,7 @@ const userController = {
               </p>
             </div>
           </div>
-          
+
           <div class="footer">
             <p>📧 อีเมลนี้ถูกส่งโดยระบบอัตโนมัติ กรุณาอย่าตอบกลับ</p>
             <p>🔒 ข้อมูลของคุณได้รับการปกป้องตามมาตรฐานความปลอดภัย</p>
@@ -1067,40 +1067,40 @@ const userController = {
       </body>
       </html>
       `;
-      
+
       const emailText = `
       📧 OTP สำหรับสมัครสมาชิก: ระบบยืม-คืนครุภัณฑ์
       คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
-      
+
       🔐 ยืนยันการสมัครสมาชิก
-      
+
       รหัส OTP ของคุณ: ${otp}
-      
+
       ⏰ รหัสนี้จะหมดอายุใน 5 นาที
-      
+
       📋 วิธีการใช้งาน:
       1. คัดลอกรหัส OTP ด้านบน
       2. กลับไปยังหน้าเว็บไซต์
       3. วางรหัส OTP ในช่องที่กำหนด
       4. กดปุ่ม "ยืนยัน" เพื่อดำเนินการต่อ
-      
+
       ⚠️ ข้อควรระวัง:
       • อย่าแชร์รหัส OTP กับผู้อื่น
       • รหัสนี้ใช้สำหรับการสมัครสมาชิกเท่านั้น
       • หากไม่ใช่คุณ กรุณาละเว้นการใช้งาน
-      
+
       📞 ติดต่อผู้ดูแลระบบ:
          สถานที่: ${contactInfo.location}
          โทรศัพท์: ${contactInfo.phone}
          เวลาทำการ: ${contactInfo.hours}
-      
+
       🔒 ข้อมูลของคุณได้รับการปกป้องตามมาตรฐานความปลอดภัย
-      
+
       ---
       © ${new Date().getFullYear()} คณะวิทยาการสารสนเทศ มหาวิทยาลัยมหาสารคาม
       ระบบยืม-คืนครุภัณฑ์ | เวอร์ชัน 1.0.0
       `;
-      
+
       await sendMail({
         to: email,
         subject: '🔑 OTP สำหรับเปลี่ยนรหัสผ่าน - ระบบยืม-คืนครุภัณฑ์',
@@ -1217,22 +1217,22 @@ const userController = {
 
       // สร้าง device fingerprint
       const deviceInfo = generateDeviceFingerprint(req);
-      
+
       // ตรวจสอบว่าเป็นอุปกรณ์ใหม่หรือไม่
       const userSessions = activeSessions.get(user.user_id) || [];
       const isNewDevice = !userSessions.some(session => session.fingerprint === deviceInfo.fingerprint);
-      
+
       // สร้าง Access Token อายุสั้น และ Refresh Token ในคุกกี้
-      const token = jwt.sign({ 
-        user_id: user.user_id, 
-        username: user.username, 
+      const token = jwt.sign({
+        user_id: user.user_id,
+        username: user.username,
         role,
         deviceFingerprint: deviceInfo.fingerprint,
         loginTime: Date.now()
       }, JWT_SECRET, { expiresIn: '45m' });
 
       const refreshToken = jwt.sign({ user_id: user.user_id, tokenId: crypto.randomUUID() }, REFRESH_SECRET, { expiresIn: '7d' });
-      
+
       // บันทึก session ใหม่
       const newSession = {
         token,
@@ -1240,18 +1240,18 @@ const userController = {
         loginTime: Date.now(),
         lastActivity: Date.now()
       };
-      
+
       userSessions.push(newSession);
       activeSessions.set(user.user_id, userSessions);
-      
+
       // ส่งแจ้งเตือนถ้าเป็นอุปกรณ์ใหม่
       if (isNewDevice) {
         sendLoginNotification(user, deviceInfo, true);
       }
-      
+
       // รีเซ็ต login attempts เมื่อสำเร็จ
       updateLoginAttempts(username, ip, true);
-      
+
       // ส่งข้อมูล user (ไม่รวม password) + token + เฉพาะ field ที่จำเป็น
       const { user_id, user_code, username: userUsername, Fullname, email, phone, avatar, street, parish, district, province, postal_no, branch_name, position_name } = user;
       console.log('LOGIN RESPONSE:', {
@@ -1641,16 +1641,30 @@ const userController = {
   updateLineNotifyEnabled: async (req, res) => {
     const userId = req.params.id;
     const { line_notify_enabled } = req.body;
+
+    console.log('=== updateLineNotifyEnabled ===');
+    console.log('User ID:', userId);
+    console.log('line_notify_enabled:', line_notify_enabled);
+    console.log('Request body:', req.body);
+
     try {
       if (typeof line_notify_enabled === 'undefined') {
+        console.log('Error: Missing line_notify_enabled');
         return res.status(400).json({ message: 'Missing line_notify_enabled' });
       }
+
       const result = await User.updateLineNotifyEnabled(userId, line_notify_enabled);
+      console.log('Update result:', result);
+
       if (result.affectedRows === 0) {
+        console.log('Error: User not found');
         return res.status(404).json({ message: 'User not found' });
       }
+
+      console.log('Success: LINE notify updated');
       res.json({ message: 'อัปเดตสถานะแจ้งเตือน LINE สำเร็จ' });
     } catch (err) {
+      console.error('Error in updateLineNotifyEnabled:', err);
       res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
     }
   },
@@ -1759,14 +1773,14 @@ const userController = {
     try {
       const userId = req.user.user_id;
       const userSessions = activeSessions.get(userId) || [];
-      
+
       const sessions = userSessions.map(session => ({
         deviceInfo: session.deviceInfo,
         loginTime: session.loginTime,
         lastActivity: session.lastActivity,
         isCurrent: session.token === req.headers.authorization?.replace('Bearer ', '')
       }));
-      
+
       res.json({ sessions });
     } catch (err) {
       console.error('Error getting active sessions:', err);
@@ -1779,19 +1793,19 @@ const userController = {
     try {
       const userId = req.user.user_id;
       const token = req.headers.authorization?.replace('Bearer ', '');
-      
+
       if (token) {
         // ลบ session ที่ตรงกับ token
         const userSessions = activeSessions.get(userId) || [];
         const updatedSessions = userSessions.filter(session => session.token !== token);
-        
+
         if (updatedSessions.length === 0) {
           activeSessions.delete(userId);
         } else {
           activeSessions.set(userId, updatedSessions);
         }
       }
-      
+
       res.json({ message: 'ออกจากระบบสำเร็จ' });
     } catch (err) {
       console.error('Error during logout:', err);
@@ -1804,7 +1818,7 @@ const userController = {
     try {
       const userId = req.user.user_id;
       activeSessions.delete(userId);
-      
+
       res.json({ message: 'ออกจากระบบทุกอุปกรณ์สำเร็จ' });
     } catch (err) {
       console.error('Error during logout all:', err);
