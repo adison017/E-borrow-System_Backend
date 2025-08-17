@@ -514,10 +514,32 @@ const User = {
   // ฟังก์ชันสำหรับอัปเดต line_id ให้ username ที่ระบุ
   updateUserLineIdByUsername: async (username, line_id) => {
     try {
+      console.log('=== updateUserLineIdByUsername ===');
+      console.log('Username:', username);
+      console.log('Line ID:', line_id);
+
+      // ตรวจสอบว่ามี username นี้ในระบบหรือไม่
+      const [checkResult] = await db.query(
+        'SELECT user_id, username, Fullname FROM users WHERE username = ?',
+        [username]
+      );
+
+      console.log('User check result:', checkResult);
+
+      if (checkResult.length === 0) {
+        console.log('Username not found in database');
+        return false;
+      }
+
+      // อัปเดต line_id
       const [result] = await db.query(
         'UPDATE users SET line_id = ? WHERE username = ?',
         [line_id, username]
       );
+
+      console.log('Update result:', result);
+      console.log('Affected rows:', result.affectedRows);
+
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error in updateUserLineIdByUsername:', error);
