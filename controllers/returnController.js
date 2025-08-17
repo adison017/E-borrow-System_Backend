@@ -237,7 +237,7 @@ export const createReturn = async (req, res) => {
                     action: {
                       type: 'uri',
                       label: 'ชำระเงิน/ดูรายละเอียด',
-                      uri: 'https://your-website.com/payment'
+                      uri: 'https://e-borrow-system.vercel.app'
                     }
                   },
                   {
@@ -317,7 +317,7 @@ export const createReturn = async (req, res) => {
                     action: {
                       type: 'uri',
                       label: 'ติชมระบบ',
-                      uri: 'https://your-website.com/feedback'
+                      uri: 'https://e-borrow-system.vercel.app'
                     }
                   },
                   {
@@ -529,7 +529,7 @@ export const updatePayStatus = async (req, res) => {
                   action: {
                     type: 'uri',
                     label: 'ติชมระบบ',
-                    uri: 'https://your-website.com/feedback'
+                                         uri: 'https://e-borrow-system.vercel.app'
                   }
                 },
                 {
