@@ -67,7 +67,11 @@ server = http.createServer(app);
 // }
 
 // Centralized CORS configuration
-const defaultDevOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+const defaultDevOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://e-borrow-system.vercel.app' // Production frontend URL
+];
 const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
   .split(',')
   .map(s => s.trim())
@@ -75,9 +79,14 @@ const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL
 
 const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOrigins]));
 
+// Log allowed origins for debugging
+console.log('CORS Allowed Origins:', allowedOrigins);
+
 function isOriginAllowed(origin) {
   if (!origin) return true; // non-browser or same-origin
-  return allowedOrigins.includes(origin);
+  const isAllowed = allowedOrigins.includes(origin);
+  console.log(`CORS Check - Origin: ${origin}, Allowed: ${isAllowed}`);
+  return isAllowed;
 }
 
 const io = new SocketIOServer(server, {
@@ -217,19 +226,19 @@ io.on('connection', async (socket) => {
     socket.disconnect();
     return;
   }
-  
+
   // จัดการ disconnect
   socket.on('disconnect', (reason) => {
     console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
     removeSocketSession(socket.id);
   });
-  
+
   // จัดการ error
   socket.on('error', (error) => {
     console.error(`Socket error: ${socket.id}`, error);
     removeSocketSession(socket.id);
   });
-  
+
   // Heartbeat เพื่อตรวจสอบการเชื่อมต่อ
   socket.on('ping', () => {
     socket.emit('pong', { timestamp: Date.now() });
@@ -240,14 +249,14 @@ io.on('connection', async (socket) => {
 setInterval(() => {
   const now = Date.now();
   const disconnectedSockets = [];
-  
+
   socketSessions.forEach((session, socketId) => {
     // ลบ session ที่ไม่มีการใช้งานเกิน 30 นาที
     if (now - session.connectedAt > 30 * 60 * 1000) {
       disconnectedSockets.push(socketId);
     }
   });
-  
+
   disconnectedSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
@@ -255,7 +264,7 @@ setInterval(() => {
     }
     removeSocketSession(socketId);
   });
-  
+
   if (disconnectedSockets.length > 0) {
     console.log(`Cleaned up ${disconnectedSockets.length} inactive socket sessions`);
   }
@@ -267,19 +276,59 @@ const corsOptions = {
     if (isOriginAllowed(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 0 // Disable preflight caching to avoid stale CORS policy in browsers
 };
 
 app.use(cors(corsOptions));
 
+// Global OPTIONS handler for all routes to ensure CORS preflight is handled
+// app.options('*', cors(corsOptions));
+
+// Central OPTIONS preflight handler (route-agnostic to avoid path-to-regexp issues)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin;
+    if (!origin || isOriginAllowed(origin)) {
+      if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Vary', 'Origin');
+      }
+      res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+      const reqHeaders = req.headers['access-control-request-headers'];
+      res.header('Access-Control-Allow-Headers', reqHeaders || 'Authorization, Content-Type, X-Requested-With, Accept, Origin');
+      res.header('Access-Control-Allow-Credentials', 'true');
+      return res.sendStatus(204);
+    }
+  }
+  next();
+});
+
+// Debug middleware removed - CORS issue fixed
+
+// Global CORS middleware - Removed to avoid conflicts with main CORS configuration
+// The main CORS configuration above handles all methods including PATCH
+
 // Parse cookies for refresh token handling
 app.use(cookieParser());
 
-// Add request logging middleware
+// Add request logging middleware with CORS debugging
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+
+  // Debug CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    console.log('CORS Preflight Request:', {
+      origin: req.headers.origin,
+      method: req.headers['access-control-request-method'],
+      headers: req.headers['access-control-request-headers']
+    });
+  }
+
   next();
 });
 
@@ -287,27 +336,27 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
+
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
+
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
   // Strict Transport Security (HSTS) - only in production
   // if (isProduction) {
   //   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   // }
-  
+
   // Content Security Policy
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;");
-  
+
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
+
   // Permissions Policy
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
+
   next();
 });
 
@@ -421,11 +470,16 @@ app.use('/uploads', cors(corsOptions), express.static(path.join(__dirname, '/upl
 
 // Create nested router for user-related routes
 const userRouter = express.Router();
+
 userRouter.use('/', userRoutes);
 userRouter.use('/positions', positionRoutes);
 userRouter.use('/branches', branchRoutes);
 userRouter.use('/roles', roleRoutes);
-app.use('/api/users', userRouter);
+
+// Apply CORS to the user routes at the app level
+app.use('/api/users', cors(corsOptions), userRouter);
+
+// Specific OPTIONS handler removed - using global handler instead
 
 // Route อื่นๆ ที่ต้องการอ่าน req.body
 app.use('/api/borrows', borrowRoutes);
@@ -448,10 +502,21 @@ app.use('/api/dashboard', dashboardRoutes);
 app.get('/', (req, res) => {
   res.json({
     message: 'E-borrow API running',
-    cors_allowed_origins: configuredOrigins,
+    cors_allowed_origins: allowedOrigins,
     timestamp: new Date().toISOString()
   });
 });
+
+// CORS test route - temporarily removed to fix path-to-regexp error
+// app.options('/api/cors-test', cors(corsOptions));
+// app.patch('/api/cors-test', cors(corsOptions), (req, res) => {
+//   res.json({
+//     message: 'CORS PATCH test successful',
+//     origin: req.headers.origin,
+//     method: req.method,
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
