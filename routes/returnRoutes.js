@@ -105,6 +105,13 @@ router.post('/upload-slip', async (req, res, next) => {
 // ยืนยันการจ่ายเงิน
 router.post('/confirm-payment', returnController.confirmPayment);
 
+// ผู้ใช้ส่งสลิปเพื่อรออนุมัติจากแอดมิน
+router.post('/submit-slip', returnController.submitSlipForReview);
+
+// แอดมินอนุมัติ/ปฏิเสธสลิป (final approve by last admin)
+router.post('/:return_id/admin-approve-slip', returnController.adminApproveSlip);
+router.post('/:return_id/admin-reject-slip', returnController.adminRejectSlip);
+
 // อัปโหลดสลิปไปยัง Cloudinary (ใหม่)
 router.post('/upload-slip-cloudinary', async (req, res, next) => {
   try {

@@ -43,7 +43,9 @@ export const getAllBorrows = async () => {
   bt.rejection_reason,
   bt.signature_image,
   bt.handover_photo,
-  bt.important_documents
+  bt.important_documents,
+  ret.pay_status,
+  ret.payment_method
 FROM borrow_transactions bt
 JOIN users u ON bt.user_id = u.user_id
 JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -88,6 +90,8 @@ LEFT JOIN (
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
         important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+        pay_status: row.pay_status,
+        payment_method: row.payment_method,
       };
     }
     grouped[row.borrow_id].equipment.push({
@@ -277,7 +281,9 @@ export const getBorrowsByStatus = async (statusArray) => {
       bt.signature_image,
       bt.handover_photo,
       bt.important_documents,
-      ret.proof_image
+      ret.proof_image,
+      ret.pay_status,
+      ret.payment_method
     FROM borrow_transactions bt
     JOIN users u ON bt.user_id = u.user_id
     JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -322,7 +328,9 @@ export const getBorrowsByStatus = async (statusArray) => {
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
         important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
-        proof_image: row.proof_image
+        proof_image: row.proof_image,
+        pay_status: row.pay_status,
+        payment_method: row.payment_method
       };
     }
     grouped[row.borrow_id].equipment.push({
