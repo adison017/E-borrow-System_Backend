@@ -169,7 +169,10 @@ function verifyToken(token) {
 }
 
 io.on('connection', async (socket) => {
-  console.log('Socket connected:', socket.id);
+  const clientOrigin = socket.handshake.headers.origin || 'No origin';
+  const userAgent = socket.handshake.headers['user-agent'] || 'No user-agent';
+
+  console.log(`🔌 Socket connected: ${socket.id} - Origin: ${clientOrigin} - User-Agent: ${userAgent.substring(0, 100)}...`);
 
   // ตั้งค่าหลังผ่าน handshake auth แล้ว
   try {
@@ -230,7 +233,9 @@ io.on('connection', async (socket) => {
 
   // จัดการ disconnect
   socket.on('disconnect', (reason) => {
-    console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
+    const session = socketSessions.get(socket.id);
+    const userInfo = session ? ` (${session.username})` : '';
+    console.log(`🔌 Socket disconnected: ${socket.id}${userInfo}, reason: ${reason}`);
     removeSocketSession(socket.id);
   });
 
@@ -502,9 +507,55 @@ app.use('/api/dashboard', dashboardRoutes);
 
 // Root route
 app.get('/', (req, res) => {
+  const serverUrl = getServerUrl();
   res.json({
     message: 'E-borrow API running',
-    cors_allowed_origins: allowedOrigins,
+    server: {
+      url: serverUrl,
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT,
+      ssl: isProduction ? 'enabled' : 'disabled'
+    },
+    api: {
+      base_url: `${serverUrl}/api`,
+      upload_url: `${serverUrl}/uploads`,
+      websocket_url: serverUrl
+    },
+    cors: {
+      allowed_origins: allowedOrigins,
+      configured_origins: configuredOrigins
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API host info endpoint
+app.get('/api/host-info', (req, res) => {
+  const serverUrl = getServerUrl();
+  const clientOrigin = req.headers.origin || 'No origin';
+
+  console.log(`📊 API Host Info Request - Client Origin: ${clientOrigin}`);
+
+  res.json({
+    server_url: serverUrl,
+    api_base_url: `${serverUrl}/api`,
+    upload_url: `${serverUrl}/uploads`,
+    websocket_url: serverUrl,
+    environment: process.env.NODE_ENV || 'development',
+    client_origin: clientOrigin,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Host info endpoint for testing
+app.get("/host-info", (req, res) => {
+  res.json({
+    server_url: process.env.BASE_URL || `http://localhost:${PORT}`,
+    api_base_url: `${process.env.BASE_URL || `http://localhost:${PORT}`}/api`,
+    upload_url: `${process.env.BASE_URL || `http://localhost:${PORT}`}/uploads`,
+    websocket_url: process.env.WEBSOCKET_URL || process.env.BASE_URL || `http://localhost:${PORT}`,
+    environment: process.env.NODE_ENV || "development",
+    client_origin: req.headers.origin || "No origin",
     timestamp: new Date().toISOString()
   });
 });
@@ -564,14 +615,47 @@ app.use((err, req, res, next) => {
 
 
 const PORT = process.env.PORT || 5000;
+
+// Get server URL for logging
+const getServerUrl = () => {
+  const protocol = isProduction ? 'https' : 'http';
+  const host = process.env.HOST || 'localhost';
+  return `${protocol}://${host}:${PORT}`;
+};
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const origin = req.headers.origin || 'No origin';
+  const userAgent = req.headers['user-agent'] || 'No user-agent';
+
+  console.log(`[${timestamp}] ${req.method} ${req.path} - Origin: ${origin} - User-Agent: ${userAgent.substring(0, 100)}...`);
+
+  next();
+});
+
 server.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
+  const serverUrl = getServerUrl();
+  console.log('🚀 ========================================');
+  console.log('🚀 E-Borrow System Backend Started');
+  console.log('🚀 ========================================');
+  console.log(`🌐 Server URL: ${serverUrl}`);
+  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 Port: ${PORT}`);
+  console.log(`🔒 SSL: ${isProduction ? 'Enabled (HTTPS)' : 'Disabled (HTTP)'}`);
+
   if (configuredOrigins.length > 0) {
-    console.log('CORS enabled for origins:', configuredOrigins.join(', '));
+    console.log('✅ CORS enabled for origins:', configuredOrigins.join(', '));
   } else {
-    console.log('CORS configured but no FRONTEND_URL(S) set. Set FRONTEND_URL or FRONTEND_URLS env.');
+    console.log('⚠️ CORS configured but no FRONTEND_URL(S) set. Set FRONTEND_URL or FRONTEND_URLS env.');
   }
-  console.log('Socket.IO server started');
+
+  console.log('🔌 Socket.IO server started');
+  console.log('📊 API Host Information:');
+  console.log(`   - Frontend should use: ${serverUrl}/api`);
+  console.log(`   - Upload endpoint: ${serverUrl}/uploads`);
+  console.log(`   - WebSocket endpoint: ${serverUrl}`);
+  console.log('🚀 ========================================');
 
   // Initialize database tables after server starts
   try {
