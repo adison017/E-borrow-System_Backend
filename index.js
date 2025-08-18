@@ -20,7 +20,6 @@ import './cron/notifySchedule.js';
 // Import models
 import * as BorrowModel from './models/borrowModel.js';
 import * as RepairRequest from './models/repairRequestModel.js';
-import roomModel from './models/roomModel.js';
 
 // Import routes
 import branchRoutes from './routes/branchRoutes.js';
@@ -71,9 +70,10 @@ server = http.createServer(app);
 const defaultDevOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  'https://e-borrow-system.vercel.app' // Production frontend URL
+  'https://e-borrow-system.vercel.app', // Production frontend URL
+  'https://eborrow-system.vercel.app'   // Alternative frontend URL (without dash)
 ];
-const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+const configuredOrigins = (process.env.FRONTEND_URLS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -82,6 +82,7 @@ const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOr
 
 // Log allowed origins for debugging
 console.log('CORS Allowed Origins:', allowedOrigins);
+console.log('FRONTEND_URLS from env:', process.env.FRONTEND_URLS);
 
 function isOriginAllowed(origin) {
   if (!origin) return true; // non-browser or same-origin
@@ -155,7 +156,6 @@ function removeSocketSession(socketId) {
     }
     // ลบ session
     socketSessions.delete(socketId);
-    console.log(`Socket session removed: ${socketId} for user: ${session.userId}`);
   }
 }
 
@@ -171,8 +171,6 @@ function verifyToken(token) {
 io.on('connection', async (socket) => {
   const clientOrigin = socket.handshake.headers.origin || 'No origin';
   const userAgent = socket.handshake.headers['user-agent'] || 'No user-agent';
-
-  console.log(`🔌 Socket connected: ${socket.id} - Origin: ${clientOrigin} - User-Agent: ${userAgent.substring(0, 100)}...`);
 
   // ตั้งค่าหลังผ่าน handshake auth แล้ว
   try {
@@ -201,7 +199,7 @@ io.on('connection', async (socket) => {
     }
     userSockets.get(decoded.user_id).add(socket.id);
 
-    console.log(`User authenticated: ${decoded.username} (${decoded.user_id}) on socket: ${socket.id}`);
+
 
     // ส่งข้อมูล badge counts เริ่มต้น
     try {
@@ -233,9 +231,6 @@ io.on('connection', async (socket) => {
 
   // จัดการ disconnect
   socket.on('disconnect', (reason) => {
-    const session = socketSessions.get(socket.id);
-    const userInfo = session ? ` (${session.username})` : '';
-    console.log(`🔌 Socket disconnected: ${socket.id}${userInfo}, reason: ${reason}`);
     removeSocketSession(socket.id);
   });
 
@@ -271,15 +266,19 @@ setInterval(() => {
     removeSocketSession(socketId);
   });
 
-  if (disconnectedSockets.length > 0) {
-    console.log(`Cleaned up ${disconnectedSockets.length} inactive socket sessions`);
-  }
+
 }, 5 * 60 * 1000);
 
 // Enable CORS with specific options (allow only configured frontend origins)
 const corsOptions = {
   origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
     if (isOriginAllowed(origin)) return callback(null, true);
+
+    // Log blocked origins for debugging
+    console.log(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -292,6 +291,17 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Add global CORS headers for all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
 // Global OPTIONS handler for all routes to ensure CORS preflight is handled
 // app.options('*', cors(corsOptions));
 
@@ -299,17 +309,21 @@ app.use(cors(corsOptions));
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
     const origin = req.headers.origin;
-    if (!origin || isOriginAllowed(origin)) {
-      if (origin) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Vary', 'Origin');
-      }
-      res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-      const reqHeaders = req.headers['access-control-request-headers'];
-      res.header('Access-Control-Allow-Headers', reqHeaders || 'Authorization, Content-Type, X-Requested-With, Accept, Origin');
-      res.header('Access-Control-Allow-Credentials', 'true');
-      return res.sendStatus(204);
+
+    // Always allow OPTIONS requests
+    if (origin && isOriginAllowed(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    } else if (origin) {
+      // Log blocked origins for debugging
+      console.log(`OPTIONS blocked origin: ${origin}`);
     }
+
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    const reqHeaders = req.headers['access-control-request-headers'];
+    res.header('Access-Control-Allow-Headers', reqHeaders || 'Authorization, Content-Type, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(204);
   }
   next();
 });
@@ -322,19 +336,8 @@ app.use((req, res, next) => {
 // Parse cookies for refresh token handling
 app.use(cookieParser());
 
-// Add request logging middleware with CORS debugging
+// Request logging middleware (disabled)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-
-  // Debug CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    console.log('CORS Preflight Request:', {
-      origin: req.headers.origin,
-      method: req.headers['access-control-request-method'],
-      headers: req.headers['access-control-request-headers']
-    });
-  }
-
   next();
 });
 
@@ -534,8 +537,6 @@ app.get('/api/host-info', (req, res) => {
   const serverUrl = getServerUrl();
   const clientOrigin = req.headers.origin || 'No origin';
 
-  console.log(`📊 API Host Info Request - Client Origin: ${clientOrigin}`);
-
   res.json({
     server_url: serverUrl,
     api_base_url: `${serverUrl}/api`,
@@ -623,46 +624,11 @@ const getServerUrl = () => {
   return `${protocol}://${host}:${PORT}`;
 };
 
-// Add request logging middleware
+// Request logging middleware (disabled for cleaner logs)
 app.use((req, res, next) => {
-  const timestamp = new Date().toISOString();
-  const origin = req.headers.origin || 'No origin';
-  const userAgent = req.headers['user-agent'] || 'No user-agent';
-
-  console.log(`[${timestamp}] ${req.method} ${req.path} - Origin: ${origin} - User-Agent: ${userAgent.substring(0, 100)}...`);
-
   next();
 });
 
-server.listen(PORT, async () => {
-  const serverUrl = getServerUrl();
-  console.log('🚀 ========================================');
-  console.log('🚀 E-Borrow System Backend Started');
-  console.log('🚀 ========================================');
-  console.log(`🌐 Server URL: ${serverUrl}`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📡 Port: ${PORT}`);
-  console.log(`🔒 SSL: ${isProduction ? 'Enabled (HTTPS)' : 'Disabled (HTTP)'}`);
-
-  if (configuredOrigins.length > 0) {
-    console.log('✅ CORS enabled for origins:', configuredOrigins.join(', '));
-  } else {
-    console.log('⚠️ CORS configured but no FRONTEND_URL(S) set. Set FRONTEND_URL or FRONTEND_URLS env.');
-  }
-
-  console.log('🔌 Socket.IO server started');
-  console.log('📊 API Host Information:');
-  console.log(`   - Frontend should use: ${serverUrl}/api`);
-  console.log(`   - Upload endpoint: ${serverUrl}/uploads`);
-  console.log(`   - WebSocket endpoint: ${serverUrl}`);
-  console.log('🚀 ========================================');
-
-  // Initialize database tables after server starts
-  try {
-    await roomModel.initialize();
-    console.log('✅ Database tables initialized successfully');
-  } catch (error) {
-    console.warn('⚠️ Database initialization failed:', error.message);
-    console.warn('Some features may not work properly');
-  }
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
