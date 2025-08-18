@@ -3,6 +3,12 @@ import * as BorrowModel from '../models/borrowModel.js';
 import * as EquipmentModel from '../models/equipmentModel.js';
 import * as DamageLevelModel from '../models/damageLevelModel.js';
 import { updateProofImageAndPayStatus } from '../models/returnModel.js';
+import {
+  updateSlipPendingByBorrowId,
+  approvePaymentByReturnId,
+  rejectSlipByReturnId,
+  getLatestReturnByBorrowId,
+} from '../models/returnModel.js';
 import User from '../models/userModel.js';
 import { sendLineNotify } from '../utils/lineNotify.js';
 import { broadcastBadgeCounts } from '../index.js';
@@ -11,6 +17,28 @@ import * as RepairRequest from '../models/repairRequestModel.js';
 // Helper function for strict check
 function isLineNotifyEnabled(val) {
   return val === 1 || val === true || val === '1';
+}
+
+// Normalize fine_percent to 0..100 scale number
+function normalizePercent(value) {
+  try {
+    if (value === null || value === undefined) return 0;
+    let v = value;
+    if (typeof v === 'string') {
+      // remove % and spaces
+      v = v.replace(/%/g, '').trim();
+      const parsed = parseFloat(v);
+      if (Number.isNaN(parsed)) return 0;
+      v = parsed;
+    }
+    if (typeof v !== 'number') v = Number(v);
+    if (!Number.isFinite(v)) return 0;
+    // if stored as fraction (<=1), convert to percent
+    if (v <= 1) return v * 100;
+    return v;
+  } catch {
+    return 0;
+  }
 }
 
 export const getAllReturns = async (req, res) => {
@@ -119,7 +147,7 @@ export const createReturn = async (req, res) => {
            const damageLevel = await DamageLevelModel.getDamageLevelById(itemCondition.damageLevelId);
 
            if (damageLevel && damageLevel.fine_percent !== null && damageLevel.fine_percent !== undefined) {
-             const conditionPercent = Number(damageLevel.fine_percent);
+             const conditionPercent = normalizePercent(damageLevel.fine_percent);
              console.log(`[RETURN] Equipment ${eq.item_code} condition percent: ${conditionPercent}%`);
 
              // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 70% ให้อัปเดตสถานะเป็น 'ชำรุด'
@@ -143,6 +171,8 @@ export const createReturn = async (req, res) => {
          }
        }
       // === จบ logic ใหม่ ===
+
+      // หมายเหตุ: ไม่ตั้งค่าเป็น "พร้อมใช้งาน" ทับอีกครั้ง เพื่อไม่ override กรณี >= 70% ที่ตั้งเป็น "ชำรุด" แล้ว
     }
 
     // หลังอัปเดตสถานะ borrow ให้ query count ใหม่แล้ว broadcast
@@ -417,7 +447,7 @@ export const updatePayStatus = async (req, res) => {
            const damageLevel = await DamageLevelModel.getDamageLevelById(itemCondition.damageLevelId);
 
            if (damageLevel && damageLevel.fine_percent !== null && damageLevel.fine_percent !== undefined) {
-             const conditionPercent = Number(damageLevel.fine_percent);
+             const conditionPercent = normalizePercent(damageLevel.fine_percent);
              console.log(`[PAY] Equipment ${eq.item_code} condition percent: ${conditionPercent}%`);
 
              // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 70% ให้อัปเดตสถานะเป็น 'ชำรุด'
@@ -622,5 +652,88 @@ export const confirmPayment = async (req, res) => {
   } catch (err) {
     console.error('[confirm-payment] error:', err);
     res.status(500).json({ success: false, message: 'Confirm payment failed', error: err.message });
+  }
+};
+
+// User uploads slip URL (already uploaded to Cloudinary) and keep status pending for admin review
+export const submitSlipForReview = async (req, res) => {
+  try {
+    const { borrow_id, slip_url } = req.body;
+    if (!borrow_id || !slip_url) {
+      return res.status(400).json({ success: false, message: 'Missing borrow_id or slip_url' });
+    }
+    await updateSlipPendingByBorrowId(borrow_id, slip_url);
+    // touch updated_at on borrow to aid latest selection and cache busting
+    try {
+      await (await import('../db.js')).default.query('UPDATE borrow_transactions SET updated_at = CURRENT_TIMESTAMP WHERE borrow_id = ?', [borrow_id]);
+    } catch {}
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[submitSlipForReview] error:', err);
+    return res.status(500).json({ success: false, message: 'Submit slip failed', error: err.message });
+  }
+};
+
+// Admin approves slip (final admin action)
+export const adminApproveSlip = async (req, res) => {
+  try {
+    const { return_id } = req.params;
+    if (!return_id) return res.status(400).json({ success: false, message: 'Missing return_id' });
+    await approvePaymentByReturnId(return_id);
+    // After marking paid/completed, update equipment statuses
+    try {
+      const ret = await ReturnModel.getReturnById(return_id);
+      if (ret && ret.borrow_id) {
+        const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+        const equipmentList = borrow && borrow.equipment ? borrow.equipment : [];
+        const returnItems = await ReturnModel.getReturnItemsByReturnId(return_id);
+        const itemConditionsMap = {};
+        for (const item of returnItems) {
+          itemConditionsMap[item.item_id] = {
+            damageLevelId: item.damage_level_id,
+            note: item.damage_note,
+            fine_amount: item.fine_amount,
+          };
+        }
+        for (const eq of equipmentList) {
+          const itemCondition = itemConditionsMap[eq.item_id];
+          if (itemCondition && itemCondition.damageLevelId) {
+            const damageLevel = await DamageLevelModel.getDamageLevelById(itemCondition.damageLevelId);
+            if (damageLevel && damageLevel.fine_percent !== null && damageLevel.fine_percent !== undefined) {
+              const conditionPercent = normalizePercent(damageLevel.fine_percent);
+              if (conditionPercent >= 70) {
+                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'ชำรุด');
+              } else {
+                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
+              }
+            } else {
+              await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
+            }
+          } else {
+            await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[adminApproveSlip] error updating equipment statuses:', e);
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[adminApproveSlip] error:', err);
+    return res.status(500).json({ success: false, message: 'Approve slip failed', error: err.message });
+  }
+};
+
+// Admin rejects slip and request user to reupload
+export const adminRejectSlip = async (req, res) => {
+  try {
+    const { return_id } = req.params;
+    const { reason } = req.body || {};
+    if (!return_id) return res.status(400).json({ success: false, message: 'Missing return_id' });
+    await rejectSlipByReturnId(return_id, reason || null);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[adminRejectSlip] error:', err);
+    return res.status(500).json({ success: false, message: 'Reject slip failed', error: err.message });
   }
 };

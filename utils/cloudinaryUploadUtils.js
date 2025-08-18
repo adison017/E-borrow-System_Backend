@@ -16,7 +16,8 @@ export const uploadBase64ToCloudinary = async (base64Data, folder, customName = 
     const uploadOptions = {
       folder: folder,
       resource_type: 'auto',
-      overwrite: false
+      overwrite: true,
+      invalidate: true
     };
 
     // If custom name is provided, use it as public_id

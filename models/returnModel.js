@@ -108,7 +108,8 @@ export const getAllReturns_pay = async (user_id = null) => {
     ret.late_fine,
     ret.late_days,
     ret.return_date AS return_date_real,
-    ret.payment_method
+    ret.payment_method,
+    ret.proof_image
   FROM borrow_transactions bt
   JOIN users u ON bt.user_id = u.user_id
   JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -117,7 +118,7 @@ export const getAllReturns_pay = async (user_id = null) => {
   LEFT JOIN positions p ON u.position_id = p.position_id
   LEFT JOIN roles r ON u.role_id = r.role_id
   LEFT JOIN returns ret ON bt.borrow_id = ret.borrow_id
-  WHERE ret.pay_status IN ('pending')`;
+  WHERE ret.pay_status IN ('pending','failed')`;
 
   const params = [];
   if (user_id) {
@@ -170,6 +171,7 @@ export const getAllReturns_pay = async (user_id = null) => {
         late_days: row.late_days,
         return_date: row.return_date_real,
         payment_method: row.payment_method,
+        proof_image: row.proof_image || null,
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
         important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
@@ -264,4 +266,63 @@ export const getReturnItemsByReturnId = async (return_id) => {
     [return_id]
   );
   return rows;
+};
+
+// Helper to get latest return by borrow_id
+export const getLatestReturnByBorrowId = async (borrow_id) => {
+  const [rows] = await db.query(
+    `SELECT * FROM returns WHERE borrow_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [borrow_id]
+  );
+  return rows && rows.length > 0 ? rows[0] : null;
+};
+
+// Update slip URL and mark status pending for admin review
+export const updateSlipPendingByBorrowId = async (borrow_id, slipUrl) => {
+  // Update latest returns row for this borrow_id by return_id subquery to ensure correct row is updated
+  const [result] = await db.query(
+    `UPDATE returns r
+     JOIN (
+       SELECT return_id FROM returns WHERE borrow_id = ? ORDER BY created_at DESC LIMIT 1
+     ) latest ON r.return_id = latest.return_id
+     SET r.proof_image = ?, r.pay_status = 'pending', r.updated_at = CURRENT_TIMESTAMP`,
+    [borrow_id, slipUrl]
+  );
+  // Ensure borrow status remains waiting_payment while pending
+  await db.query('UPDATE borrow_transactions SET status = ? WHERE borrow_id = ?', ['waiting_payment', borrow_id]);
+  return result.affectedRows;
+};
+
+// Approve payment by admin
+export const approvePaymentByReturnId = async (return_id) => {
+  const [result] = await db.query(
+    `UPDATE returns
+     SET pay_status = 'paid', updated_at = CURRENT_TIMESTAMP
+     WHERE return_id = ?`,
+    [return_id]
+  );
+  // Set borrow to completed
+  const [rows] = await db.query('SELECT borrow_id FROM returns WHERE return_id = ?', [return_id]);
+  if (rows && rows.length > 0) {
+    const borrow_id = rows[0].borrow_id;
+    await db.query('UPDATE borrow_transactions SET status = ? WHERE borrow_id = ?', ['completed', borrow_id]);
+  }
+  return result.affectedRows;
+};
+
+// Reject slip and request reupload
+export const rejectSlipByReturnId = async (return_id, reason = null) => {
+  const [result] = await db.query(
+    `UPDATE returns
+     SET pay_status = 'failed', notes = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE return_id = ?`,
+    [reason, return_id]
+  );
+  // Keep borrow in waiting_payment
+  const [rows] = await db.query('SELECT borrow_id FROM returns WHERE return_id = ?', [return_id]);
+  if (rows && rows.length > 0) {
+    const borrow_id = rows[0].borrow_id;
+    await db.query('UPDATE borrow_transactions SET status = ? WHERE borrow_id = ?', ['waiting_payment', borrow_id]);
+  }
+  return result.affectedRows;
 };
