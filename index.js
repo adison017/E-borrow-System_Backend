@@ -20,7 +20,6 @@ import './cron/notifySchedule.js';
 // Import models
 import * as BorrowModel from './models/borrowModel.js';
 import * as RepairRequest from './models/repairRequestModel.js';
-import roomModel from './models/roomModel.js';
 
 // Import routes
 import branchRoutes from './routes/branchRoutes.js';
@@ -39,6 +38,7 @@ import roomRoutes from './routes/roomRoutes.js';
 import contactInfoRoutes from './routes/contactInfoRoutes.js';
 import cloudinaryRoutes from './routes/cloudinaryRoutes.js';
 import notificationSettingsRoutes from './routes/notificationSettingsRoutes.js';
+import paymentSettingsRoutes from './routes/paymentSettingsRoutes.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -67,17 +67,28 @@ server = http.createServer(app);
 // }
 
 // Centralized CORS configuration
-const defaultDevOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173'];
-const configuredOrigins = (process.env.FRONTEND_URLS || process.env.FRONTEND_URL || '')
+const defaultDevOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://e-borrow-system.vercel.app', // Production frontend URL
+  'https://eborrow-system.vercel.app'   // Alternative frontend URL (without dash)
+];
+const configuredOrigins = (process.env.FRONTEND_URLS || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
 
 const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOrigins]));
 
+// Log allowed origins for debugging
+console.log('CORS Allowed Origins:', allowedOrigins);
+console.log('FRONTEND_URLS from env:', process.env.FRONTEND_URLS);
+
 function isOriginAllowed(origin) {
   if (!origin) return true; // non-browser or same-origin
-  return allowedOrigins.includes(origin);
+  const isAllowed = allowedOrigins.includes(origin);
+  console.log(`CORS Check - Origin: ${origin}, Allowed: ${isAllowed}`);
+  return isAllowed;
 }
 
 const io = new SocketIOServer(server, {
@@ -145,7 +156,6 @@ function removeSocketSession(socketId) {
     }
     // ลบ session
     socketSessions.delete(socketId);
-    console.log(`Socket session removed: ${socketId} for user: ${session.userId}`);
   }
 }
 
@@ -159,7 +169,8 @@ function verifyToken(token) {
 }
 
 io.on('connection', async (socket) => {
-  console.log('Socket connected:', socket.id);
+  const clientOrigin = socket.handshake.headers.origin || 'No origin';
+  const userAgent = socket.handshake.headers['user-agent'] || 'No user-agent';
 
   // ตั้งค่าหลังผ่าน handshake auth แล้ว
   try {
@@ -188,7 +199,7 @@ io.on('connection', async (socket) => {
     }
     userSockets.get(decoded.user_id).add(socket.id);
 
-    console.log(`User authenticated: ${decoded.username} (${decoded.user_id}) on socket: ${socket.id}`);
+
 
     // ส่งข้อมูล badge counts เริ่มต้น
     try {
@@ -217,19 +228,18 @@ io.on('connection', async (socket) => {
     socket.disconnect();
     return;
   }
-  
+
   // จัดการ disconnect
   socket.on('disconnect', (reason) => {
-    console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
     removeSocketSession(socket.id);
   });
-  
+
   // จัดการ error
   socket.on('error', (error) => {
     console.error(`Socket error: ${socket.id}`, error);
     removeSocketSession(socket.id);
   });
-  
+
   // Heartbeat เพื่อตรวจสอบการเชื่อมต่อ
   socket.on('ping', () => {
     socket.emit('pong', { timestamp: Date.now() });
@@ -240,14 +250,14 @@ io.on('connection', async (socket) => {
 setInterval(() => {
   const now = Date.now();
   const disconnectedSockets = [];
-  
+
   socketSessions.forEach((session, socketId) => {
     // ลบ session ที่ไม่มีการใช้งานเกิน 30 นาที
     if (now - session.connectedAt > 30 * 60 * 1000) {
       disconnectedSockets.push(socketId);
     }
   });
-  
+
   disconnectedSockets.forEach(socketId => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
@@ -255,31 +265,79 @@ setInterval(() => {
     }
     removeSocketSession(socketId);
   });
-  
-  if (disconnectedSockets.length > 0) {
-    console.log(`Cleaned up ${disconnectedSockets.length} inactive socket sessions`);
-  }
+
+
 }, 5 * 60 * 1000);
 
 // Enable CORS with specific options (allow only configured frontend origins)
 const corsOptions = {
   origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
     if (isOriginAllowed(origin)) return callback(null, true);
+
+    // Log blocked origins for debugging
+    console.log(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Length', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 0 // Disable preflight caching to avoid stale CORS policy in browsers
 };
 
 app.use(cors(corsOptions));
 
+// Add global CORS headers for all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// Global OPTIONS handler for all routes to ensure CORS preflight is handled
+// app.options('*', cors(corsOptions));
+
+// Central OPTIONS preflight handler (route-agnostic to avoid path-to-regexp issues)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin;
+
+    // Always allow OPTIONS requests
+    if (origin && isOriginAllowed(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    } else if (origin) {
+      // Log blocked origins for debugging
+      console.log(`OPTIONS blocked origin: ${origin}`);
+    }
+
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    const reqHeaders = req.headers['access-control-request-headers'];
+    res.header('Access-Control-Allow-Headers', reqHeaders || 'Authorization, Content-Type, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Debug middleware removed - CORS issue fixed
+
+// Global CORS middleware - Removed to avoid conflicts with main CORS configuration
+// The main CORS configuration above handles all methods including PATCH
+
 // Parse cookies for refresh token handling
 app.use(cookieParser());
 
-// Add request logging middleware
+// Request logging middleware (disabled)
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   next();
 });
 
@@ -287,27 +345,27 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   // Prevent clickjacking
   res.setHeader('X-Frame-Options', 'DENY');
-  
+
   // Prevent MIME type sniffing
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  
+
   // Enable XSS protection
   res.setHeader('X-XSS-Protection', '1; mode=block');
-  
+
   // Strict Transport Security (HSTS) - only in production
   // if (isProduction) {
   //   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   // }
-  
+
   // Content Security Policy
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;");
-  
+
   // Referrer Policy
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
+
   // Permissions Policy
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-  
+
   next();
 });
 
@@ -421,11 +479,16 @@ app.use('/uploads', cors(corsOptions), express.static(path.join(__dirname, '/upl
 
 // Create nested router for user-related routes
 const userRouter = express.Router();
+
 userRouter.use('/', userRoutes);
 userRouter.use('/positions', positionRoutes);
 userRouter.use('/branches', branchRoutes);
 userRouter.use('/roles', roleRoutes);
-app.use('/api/users', userRouter);
+
+// Apply CORS to the user routes at the app level
+app.use('/api/users', cors(corsOptions), userRouter);
+
+// Specific OPTIONS handler removed - using global handler instead
 
 // Route อื่นๆ ที่ต้องการอ่าน req.body
 app.use('/api/borrows', borrowRoutes);
@@ -439,6 +502,7 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/contact-info', contactInfoRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
 app.use('/api/notification-settings', notificationSettingsRoutes);
+app.use('/api/payment-settings', paymentSettingsRoutes);
 
 // Executive dashboard analytics endpoints
 import dashboardRoutes from './routes/dashboardRoutes.js';
@@ -446,12 +510,67 @@ app.use('/api/dashboard', dashboardRoutes);
 
 // Root route
 app.get('/', (req, res) => {
+  const serverUrl = getServerUrl();
   res.json({
     message: 'E-borrow API running',
-    cors_allowed_origins: configuredOrigins,
+    server: {
+      url: serverUrl,
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT,
+      ssl: isProduction ? 'enabled' : 'disabled'
+    },
+    api: {
+      base_url: `${serverUrl}/api`,
+      upload_url: `${serverUrl}/uploads`,
+      websocket_url: serverUrl
+    },
+    cors: {
+      allowed_origins: allowedOrigins,
+      configured_origins: configuredOrigins
+    },
     timestamp: new Date().toISOString()
   });
 });
+
+// API host info endpoint
+app.get('/api/host-info', (req, res) => {
+  const serverUrl = getServerUrl();
+  const clientOrigin = req.headers.origin || 'No origin';
+
+  res.json({
+    server_url: serverUrl,
+    api_base_url: `${serverUrl}/api`,
+    upload_url: `${serverUrl}/uploads`,
+    websocket_url: serverUrl,
+    environment: process.env.NODE_ENV || 'development',
+    client_origin: clientOrigin,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Host info endpoint for testing
+app.get("/host-info", (req, res) => {
+  res.json({
+    server_url: process.env.BASE_URL || `http://localhost:${PORT}`,
+    api_base_url: `${process.env.BASE_URL || `http://localhost:${PORT}`}/api`,
+    upload_url: `${process.env.BASE_URL || `http://localhost:${PORT}`}/uploads`,
+    websocket_url: process.env.WEBSOCKET_URL || process.env.BASE_URL || `http://localhost:${PORT}`,
+    environment: process.env.NODE_ENV || "development",
+    client_origin: req.headers.origin || "No origin",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// CORS test route - temporarily removed to fix path-to-regexp error
+// app.options('/api/cors-test', cors(corsOptions));
+// app.patch('/api/cors-test', cors(corsOptions), (req, res) => {
+//   res.json({
+//     message: 'CORS PATCH test successful',
+//     origin: req.headers.origin,
+//     method: req.method,
+//     timestamp: new Date().toISOString()
+//   });
+// });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -497,21 +616,19 @@ app.use((err, req, res, next) => {
 
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => {
-  console.log(`Server running on port ${PORT}`);
-  if (configuredOrigins.length > 0) {
-    console.log('CORS enabled for origins:', configuredOrigins.join(', '));
-  } else {
-    console.log('CORS configured but no FRONTEND_URL(S) set. Set FRONTEND_URL or FRONTEND_URLS env.');
-  }
-  console.log('Socket.IO server started');
 
-  // Initialize database tables after server starts
-  try {
-    await roomModel.initialize();
-    console.log('✅ Database tables initialized successfully');
-  } catch (error) {
-    console.warn('⚠️ Database initialization failed:', error.message);
-    console.warn('Some features may not work properly');
-  }
+// Get server URL for logging
+const getServerUrl = () => {
+  const protocol = isProduction ? 'https' : 'http';
+  const host = process.env.HOST || 'localhost';
+  return `${protocol}://${host}:${PORT}`;
+};
+
+// Request logging middleware (disabled for cleaner logs)
+app.use((req, res, next) => {
+  next();
+});
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });

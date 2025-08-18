@@ -236,7 +236,7 @@ export const createBorrow = async (req, res) => {
                 action: {
                   type: 'uri',
                   label: 'ดูรายละเอียด',
-                  uri: 'https://your-system-url/borrows/' + borrow.borrow_code // เปลี่ยน url ตามจริง
+                  uri: 'https://e-borrow-system.vercel.app/borrows/' + borrow.borrow_code
                 }
               }
             ]
@@ -544,7 +544,7 @@ export const updateBorrowStatus = async (req, res) => {
                 action: {
                   type: 'uri',
                   label: 'ดูรายละเอียด',
-                  uri: 'https://your-system-url/borrows/' + borrow.borrow_code
+                  uri: 'https://e-borrow-system.vercel.app'
                 }
               }
             ]
@@ -657,7 +657,7 @@ export const updateBorrowStatus = async (req, res) => {
                   action: {
                     type: 'uri',
                     label: 'ดูรายละเอียด',
-                    uri: 'https://your-system-url/borrows/' + borrow.borrow_code
+                    uri: 'https://e-borrow-system.vercel.app'
                   }
                 }
               ]
@@ -837,7 +837,7 @@ export const updateBorrowStatus = async (req, res) => {
                   action: {
                     type: 'uri',
                     label: 'ดูรายละเอียด',
-                    uri: 'https://your-system-url/borrows/' + borrow.borrow_code
+                    uri: 'https://e-borrow-system.vercel.app'
                   }
                 }
               ]
@@ -986,7 +986,7 @@ export const updateBorrowStatus = async (req, res) => {
                   action: {
                     type: 'uri',
                     label: 'ดูรายละเอียด',
-                    uri: 'https://your-system-url/borrows/' + borrow.borrow_code
+                    uri: 'https://e-borrow-system.vercel.app'
                   }
                 }
               ]

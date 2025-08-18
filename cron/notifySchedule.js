@@ -166,7 +166,7 @@ cron.schedule('29 0 * * *', async () => {
                     action: {
                       type: "uri",
                       label: "ดูรายละเอียด",
-                      uri: "https://your-site.com/borrow/" + (borrow.borrow_code || borrow.borrowid)
+                      uri: "https://e-borrow-system.vercel.app"
                     }
                   }
                 ]

@@ -514,10 +514,32 @@ const User = {
   // ฟังก์ชันสำหรับอัปเดต line_id ให้ username ที่ระบุ
   updateUserLineIdByUsername: async (username, line_id) => {
     try {
+      console.log('=== updateUserLineIdByUsername ===');
+      console.log('Username:', username);
+      console.log('Line ID:', line_id);
+
+      // ตรวจสอบว่ามี username นี้ในระบบหรือไม่
+      const [checkResult] = await db.query(
+        'SELECT user_id, username, Fullname FROM users WHERE username = ?',
+        [username]
+      );
+
+      console.log('User check result:', checkResult);
+
+      if (checkResult.length === 0) {
+        console.log('Username not found in database');
+        return false;
+      }
+
+      // อัปเดต line_id
       const [result] = await db.query(
         'UPDATE users SET line_id = ? WHERE username = ?',
         [line_id, username]
       );
+
+      console.log('Update result:', result);
+      console.log('Affected rows:', result.affectedRows);
+
       return result.affectedRows > 0;
     } catch (error) {
       console.error('Error in updateUserLineIdByUsername:', error);
@@ -544,11 +566,43 @@ const User = {
   },
 
   updateLineNotifyEnabled: async (userId, enabled) => {
-    const [result] = await db.query(
-      'UPDATE users SET line_notify_enabled = ? WHERE user_id = ?',
-      [enabled, userId]
-    );
-    return result;
+    console.log('=== User.updateLineNotifyEnabled ===');
+    console.log('User ID:', userId);
+    console.log('Enabled:', enabled);
+
+    try {
+      // First check if user exists
+      const [userCheck] = await db.query('SELECT user_id FROM users WHERE user_id = ?', [userId]);
+      if (userCheck.length === 0) {
+        console.log('User not found:', userId);
+        return { affectedRows: 0 };
+      }
+
+      // Check if column exists
+      const [columnCheck] = await db.query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = 'line_notify_enabled'
+      `);
+
+      if (columnCheck.length === 0) {
+        console.log('Column line_notify_enabled does not exist, creating it...');
+        await db.query('ALTER TABLE users ADD COLUMN line_notify_enabled TINYINT(1) DEFAULT 0');
+        console.log('Column created successfully');
+      }
+
+      const [result] = await db.query(
+        'UPDATE users SET line_notify_enabled = ? WHERE user_id = ?',
+        [enabled, userId]
+      );
+      console.log('SQL result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error in updateLineNotifyEnabled:', error);
+      throw error;
+    }
   }
 };
 

@@ -14,6 +14,9 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// CORS middleware - Removed to avoid conflicts with main CORS configuration
+// The main CORS configuration in index.js handles all CORS requirements
+
 // กำหนด storage สำหรับสลิป
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -28,13 +31,15 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// CORS middleware - Removed to avoid conflicts with main CORS configuration
+router.patch('/:return_id/pay', returnController.updatePayStatus);
+
 // Protect all return routes
 router.use(authMiddleware);
 
 router.get('/', returnController.getAllReturns);
 router.post('/', returnController.createReturn);
 router.get('/success-borrows', returnController.getSuccessBorrows);
-router.patch('/:return_id/pay', returnController.updatePayStatus);
 router.get('/by-borrow/:borrow_id', returnController.getReturnsByBorrowId);
 
 // route summary ใช้ controller โดยตรง
@@ -105,7 +110,7 @@ router.post('/upload-slip-cloudinary', async (req, res, next) => {
   try {
     // ใช้ multer เพื่อแยกข้อมูลฟอร์มและไฟล์
     const parseMulter = multer().any();
-    
+
     parseMulter(req, res, async (err) => {
       if (err) {
         console.error('Multer error:', err);

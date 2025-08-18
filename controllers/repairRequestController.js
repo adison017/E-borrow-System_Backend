@@ -176,7 +176,7 @@ export const addRepairRequest = async (req, res) => {
                 action: {
                   type: 'uri',
                   label: 'ดูรายละเอียด',
-                  uri: 'https://your-website.com/repairs/' + (data.repair_code || result.repair_id)
+                  uri: 'https://e-borrow-system.vercel.app'
                 }
               },
               {
