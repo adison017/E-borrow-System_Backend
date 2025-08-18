@@ -39,6 +39,7 @@ import contactInfoRoutes from './routes/contactInfoRoutes.js';
 import cloudinaryRoutes from './routes/cloudinaryRoutes.js';
 import notificationSettingsRoutes from './routes/notificationSettingsRoutes.js';
 import paymentSettingsRoutes from './routes/paymentSettingsRoutes.js';
+import footerRoutes from './routes/footerRoutes.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -503,6 +504,7 @@ app.use('/api/contact-info', contactInfoRoutes);
 app.use('/api/cloudinary', cloudinaryRoutes);
 app.use('/api/notification-settings', notificationSettingsRoutes);
 app.use('/api/payment-settings', paymentSettingsRoutes);
+app.use('/api/footer-settings', footerRoutes);
 
 // Executive dashboard analytics endpoints
 import dashboardRoutes from './routes/dashboardRoutes.js';
