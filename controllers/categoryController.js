@@ -24,7 +24,12 @@ export const addCategory = async (req, res) => {
     await Category.addCategory(req.body);
     res.status(201).json({ message: 'Category added' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // ตรวจสอบ error type เพื่อส่ง status code ที่เหมาะสม
+    if (err.message.includes('มีอยู่แล้ว')) {
+      res.status(400).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
   }
 };
 
@@ -33,7 +38,12 @@ export const updateCategory = async (req, res) => {
     await Category.updateCategory(req.params.id, req.body);
     res.json({ message: 'Category updated' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    // ตรวจสอบ error type เพื่อส่ง status code ที่เหมาะสม
+    if (err.message.includes('มีอยู่แล้ว')) {
+      res.status(400).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: err.message });
+    }
   }
 };
 
