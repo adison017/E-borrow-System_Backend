@@ -19,7 +19,11 @@ export const getHistoryRequests = async () => {
         rr.pic_filename AS repair_pic,
         rr.status,
         rr.repair_code,
-        e.pic AS equipment_pic
+        e.pic AS equipment_pic,
+        rr.responsible_person,
+        rr.note AS approvalNotes,
+        rr.rejection_reason,
+        rr.inspection_notes
       FROM repair_requests rr
       JOIN users requester ON rr.user_id = requester.user_id
       LEFT JOIN branches b ON requester.branch_id = b.branch_id
@@ -69,13 +73,17 @@ export const getAllRepairRequests = async () => {
   rr.pic_filename AS repair_pic,
   rr.status,
   rr.repair_code,
-  e.pic AS equipment_pic
+  e.pic AS equipment_pic,
+          rr.responsible_person,
+        rr.note AS approvalNotes,
+        rr.rejection_reason,
+        rr.inspection_notes
 FROM repair_requests rr
 JOIN users requester ON rr.user_id = requester.user_id
 LEFT JOIN branches b ON requester.branch_id = b.branch_id
 LEFT JOIN roles r ON requester.role_id = r.role_id
 LEFT JOIN equipment e ON rr.item_id = e.item_id
-WHERE rr.status = "รออนุมัติซ่อม";
+WHERE rr.status = "pending";
 `);
 
     // Parse images for each repair request
@@ -210,7 +218,9 @@ export const addRepairRequest = async (repairRequest) => {
       note = '',
       budget = 0,
       responsible_person = '',
-      approval_date = new Date()
+      approval_date = new Date(),
+      rejection_reason = '',
+      inspection_notes = ''
     } = repairRequest;
 
     console.log('=== Adding Repair Request to Database ===');
@@ -226,9 +236,9 @@ export const addRepairRequest = async (repairRequest) => {
 
     const [result] = await connection.query(
       `INSERT INTO repair_requests
-      (repair_code, user_id, item_id, problem_description, request_date, estimated_cost, status, pic_filename, note, budget, responsible_person, approval_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [repair_code, user_id, item_id, problem_description, request_date, estimated_cost, status, imagesJson || mainPicFilename, note, budget, responsible_person, approval_date]
+      (repair_code, user_id, item_id, problem_description, request_date, estimated_cost, status, pic_filename, note, budget, responsible_person, approval_date, rejection_reason, inspection_notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [repair_code, user_id, item_id, problem_description, request_date, estimated_cost, status, imagesJson || mainPicFilename, note, budget, responsible_person, approval_date, rejection_reason, inspection_notes]
     );
 
     return { ...result, repair_id: result.insertId };
@@ -259,7 +269,9 @@ export const updateRepairRequest = async (id, repairRequest) => {
       budget = 0,
       responsible_person = '',
       approval_date = new Date(),
-      images = []
+      images = [],
+      rejection_reason = '',
+      inspection_notes = ''
     } = repairRequest;
 
     // Validate required fields
@@ -299,9 +311,11 @@ export const updateRepairRequest = async (id, repairRequest) => {
           note = ?,
           budget = ?,
           responsible_person = ?,
-          approval_date = ?
+          approval_date = ?,
+          rejection_reason = ?,
+          inspection_notes = ?
       WHERE id = ?`,
-      [problem_description, request_date, estimated_cost, status, imagesJson || mainPicFilename, note, budget, responsible_person, formattedApprovalDate, id]
+      [problem_description, request_date, estimated_cost, status, imagesJson || mainPicFilename, note, budget, responsible_person, formattedApprovalDate, rejection_reason, inspection_notes, id]
     );
 
     console.log('Update result:', result);
