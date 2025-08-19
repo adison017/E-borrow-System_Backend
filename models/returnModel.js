@@ -109,7 +109,8 @@ export const getAllReturns_pay = async (user_id = null) => {
     ret.late_days,
     ret.return_date AS return_date_real,
     ret.payment_method,
-    ret.proof_image
+    ret.proof_image,
+    ret.notes
   FROM borrow_transactions bt
   JOIN users u ON bt.user_id = u.user_id
   JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -118,7 +119,7 @@ export const getAllReturns_pay = async (user_id = null) => {
   LEFT JOIN positions p ON u.position_id = p.position_id
   LEFT JOIN roles r ON u.role_id = r.role_id
   LEFT JOIN returns ret ON bt.borrow_id = ret.borrow_id
-  WHERE ret.pay_status IN ('pending','failed')`;
+  WHERE ret.pay_status IN ('pending','failed','awaiting_payment')`;
 
   const params = [];
   if (user_id) {
@@ -172,6 +173,7 @@ export const getAllReturns_pay = async (user_id = null) => {
         return_date: row.return_date_real,
         payment_method: row.payment_method,
         proof_image: row.proof_image || null,
+        notes: row.notes || null,
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
         important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
@@ -277,7 +279,7 @@ export const getLatestReturnByBorrowId = async (borrow_id) => {
   return rows && rows.length > 0 ? rows[0] : null;
 };
 
-// Update slip URL and mark status pending for admin review
+// Update slip URL and mark status awaiting_payment for admin review
 export const updateSlipPendingByBorrowId = async (borrow_id, slipUrl) => {
   // Update latest returns row for this borrow_id by return_id subquery to ensure correct row is updated
   const [result] = await db.query(
@@ -285,10 +287,10 @@ export const updateSlipPendingByBorrowId = async (borrow_id, slipUrl) => {
      JOIN (
        SELECT return_id FROM returns WHERE borrow_id = ? ORDER BY created_at DESC LIMIT 1
      ) latest ON r.return_id = latest.return_id
-     SET r.proof_image = ?, r.pay_status = 'pending', r.updated_at = CURRENT_TIMESTAMP`,
+     SET r.proof_image = ?, r.pay_status = 'awaiting_payment', r.updated_at = CURRENT_TIMESTAMP`,
     [borrow_id, slipUrl]
   );
-  // Ensure borrow status remains waiting_payment while pending
+  // Ensure borrow status remains waiting_payment while awaiting_payment
   await db.query('UPDATE borrow_transactions SET status = ? WHERE borrow_id = ?', ['waiting_payment', borrow_id]);
   return result.affectedRows;
 };
