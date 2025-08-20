@@ -80,7 +80,7 @@ export const addRepairRequest = async (req, res) => {
     const data = req.body;
     // Set default status if not provided
     if (!data.status) {
-      data.status = 'รอดำเนินการ';
+      data.status = 'pending';
     }
     if (!data.request_date) {
       data.request_date = new Date().toISOString().split('T')[0];
@@ -90,6 +90,8 @@ export const addRepairRequest = async (req, res) => {
     if (!('budget' in data)) data.budget = 0;
     if (!('responsible_person' in data)) data.responsible_person = '';
     if (!('approval_date' in data)) data.approval_date = new Date();
+    if (!('rejection_reason' in data)) data.rejection_reason = '';
+    if (!('inspection_notes' in data)) data.inspection_notes = '';
     const images = data.images || [];
     const result = await RepairRequest.addRepairRequest({
       ...data,
@@ -233,7 +235,9 @@ export const updateRepairRequest = async (req, res) => {
       budget = 0,
       responsible_person = '',
       approval_date = new Date(),
-      images = []
+      images = [],
+      rejection_reason = '',
+      inspection_notes = ''
     } = req.body;
 
     // Validate required fields
@@ -281,7 +285,9 @@ export const updateRepairRequest = async (req, res) => {
       budget,
       responsible_person,
       approval_date,
-      images
+      images,
+      rejection_reason,
+      inspection_notes
     });
 
     // Check if repair request exists
@@ -301,7 +307,9 @@ export const updateRepairRequest = async (req, res) => {
       budget,
       responsible_person,
       approval_date,
-      images
+      images,
+      rejection_reason,
+      inspection_notes
     });
 
     // หลังอัปเดตสถานะ repair ให้ query count ใหม่แล้ว broadcast
