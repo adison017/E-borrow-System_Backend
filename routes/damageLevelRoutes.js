@@ -1,5 +1,5 @@
 import express from 'express';
-import { getDamageLevels } from '../controllers/damageLevelController.js';
+import { getDamageLevels, updateDamageLevelController, createDamageLevelController } from '../controllers/damageLevelController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -8,5 +8,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get('/', getDamageLevels);
+router.post('/', createDamageLevelController);
+router.put('/:id', updateDamageLevelController);
 
 export default router;

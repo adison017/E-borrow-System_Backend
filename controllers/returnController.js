@@ -150,13 +150,13 @@ export const createReturn = async (req, res) => {
              const conditionPercent = normalizePercent(damageLevel.fine_percent);
              console.log(`[RETURN] Equipment ${eq.item_code} condition percent: ${conditionPercent}%`);
 
-             // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 70% ให้อัปเดตสถานะเป็น 'ชำรุด'
-             if (conditionPercent >= 70) {
-               console.log(`[RETURN] Equipment ${eq.item_code} condition >= 70% (${conditionPercent}%), updating status to 'ชำรุด'`);
+             // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 50% ให้อัปเดตสถานะเป็น 'ชำรุด'
+             if (conditionPercent >= 50) {
+               console.log(`[RETURN] Equipment ${eq.item_code} condition >= 50% (${conditionPercent}%), updating status to 'ชำรุด'`);
                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'ชำรุด');
              } else {
                // สภาพปกติ ให้อัปเดตเป็น 'พร้อมใช้งาน'
-               console.log(`[RETURN] Equipment ${eq.item_code} condition < 70% (${conditionPercent}%), updating status to 'พร้อมใช้งาน'`);
+               console.log(`[RETURN] Equipment ${eq.item_code} condition < 50% (${conditionPercent}%), updating status to 'พร้อมใช้งาน'`);
                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
              }
            } else {
@@ -450,13 +450,13 @@ export const updatePayStatus = async (req, res) => {
              const conditionPercent = normalizePercent(damageLevel.fine_percent);
              console.log(`[PAY] Equipment ${eq.item_code} condition percent: ${conditionPercent}%`);
 
-             // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 70% ให้อัปเดตสถานะเป็น 'ชำรุด'
-             if (conditionPercent >= 70) {
-               console.log(`[PAY] Equipment ${eq.item_code} condition >= 70% (${conditionPercent}%), updating status to 'ชำรุด'`);
+             // หากสภาพครุภัณฑ์มากกว่าหรือเท่ากับ 50% ให้อัปเดตสถานะเป็น 'ชำรุด'
+             if (conditionPercent >= 50) {
+               console.log(`[PAY] Equipment ${eq.item_code} condition >= 50% (${conditionPercent}%), updating status to 'ชำรุด'`);
                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'ชำรุด');
              } else {
                // สภาพปกติ ให้อัปเดตเป็น 'พร้อมใช้งาน'
-               console.log(`[PAY] Equipment ${eq.item_code} condition < 70% (${conditionPercent}%), updating status to 'พร้อมใช้งาน'`);
+               console.log(`[PAY] Equipment ${eq.item_code} condition < 50% (${conditionPercent}%), updating status to 'พร้อมใช้งาน'`);
                await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
              }
            } else {
@@ -701,7 +701,7 @@ export const adminApproveSlip = async (req, res) => {
             const damageLevel = await DamageLevelModel.getDamageLevelById(itemCondition.damageLevelId);
             if (damageLevel && damageLevel.fine_percent !== null && damageLevel.fine_percent !== undefined) {
               const conditionPercent = normalizePercent(damageLevel.fine_percent);
-              if (conditionPercent >= 70) {
+              if (conditionPercent >= 50) {
                 await EquipmentModel.updateEquipmentStatus(eq.item_code, 'ชำรุด');
               } else {
                 await EquipmentModel.updateEquipmentStatus(eq.item_code, 'พร้อมใช้งาน');
