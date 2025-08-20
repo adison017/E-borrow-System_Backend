@@ -15,23 +15,56 @@ export const createBorrow = async (req, res) => {
   console.log('==== [API] POST /api/borrows ====');
   console.log('payload:', req.body);
   console.log('files:', req.files);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('req.body keys:', Object.keys(req.body));
   const { user_id, borrow_date, return_date, items, purpose, borrow_code: existingBorrowCode } = req.body;
+  
+  // Debug: ตรวจสอบข้อมูลที่ได้รับ
+  console.log('Debug - Received data:');
+  console.log('user_id:', user_id, 'type:', typeof user_id);
+  console.log('borrow_date:', borrow_date, 'type:', typeof borrow_date);
+  console.log('return_date:', return_date, 'type:', typeof return_date);
+  console.log('purpose:', purpose, 'type:', typeof purpose);
+  console.log('items:', items, 'type:', typeof items);
+  console.log('existingBorrowCode:', existingBorrowCode);
 
   // Parse items if it's a JSON string
   let parsedItems = items;
+  console.log('Debug - Items parsing:');
+  console.log('items type:', typeof items);
+  console.log('items value:', items);
+  
   if (typeof items === 'string') {
     try {
       parsedItems = JSON.parse(items);
+      console.log('Successfully parsed items JSON:', parsedItems);
     } catch (error) {
       console.error('Error parsing items JSON:', error);
       return res.status(400).json({ message: 'รูปแบบข้อมูล items ไม่ถูกต้อง' });
     }
+  } else if (Array.isArray(items)) {
+    console.log('Items is already an array:', items);
+    parsedItems = items;
+  } else {
+    console.error('Items is neither string nor array:', items);
+    return res.status(400).json({ message: 'รูปแบบข้อมูล items ไม่ถูกต้อง' });
   }
 
   // items = [{ item_id, quantity, note }]
-  if (!user_id || !borrow_date || !return_date || !Array.isArray(parsedItems) || parsedItems.length === 0) {
-    return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน' });
+  console.log('Debug - Validation check:');
+  console.log('user_id exists:', !!user_id);
+  console.log('borrow_date exists:', !!borrow_date);
+  console.log('return_date exists:', !!return_date);
+  console.log('purpose exists:', !!purpose);
+  console.log('parsedItems is array:', Array.isArray(parsedItems));
+  console.log('parsedItems length:', parsedItems ? parsedItems.length : 'N/A');
+  
+  if (!user_id || !borrow_date || !return_date || !purpose || !Array.isArray(parsedItems) || parsedItems.length === 0) {
+    console.log('Debug - Validation failed');
+    return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน กรุณากรอกข้อมูลให้ครบถ้วน' });
   }
+  
+  console.log('Debug - Validation passed');
   // ตรวจสอบ item_id ใน items ว่าต้องไม่เป็น null หรือ undefined
   const invalidItem = parsedItems.find(item => !item.item_id);
   if (invalidItem) {

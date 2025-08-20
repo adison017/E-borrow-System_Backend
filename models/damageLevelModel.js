@@ -19,3 +19,41 @@ export const getDamageLevelById = async (damage_id) => {
   }
   return rows.length > 0 ? rows[0] : null;
 };
+
+// เพิ่มฟังก์ชันอัปเดต damage level
+export const updateDamageLevel = async (damage_id, damageData) => {
+  const { name, fine_percent, detail } = damageData;
+  
+  const [result] = await db.query(
+    'UPDATE damage_levels SET name = ?, fine_percent = ?, detail = ? WHERE damage_id = ?',
+    [name, fine_percent, detail, damage_id]
+  );
+  
+  if (result.affectedRows === 0) {
+    throw new Error('Damage level not found');
+  }
+  
+  return {
+    damage_id,
+    name,
+    fine_percent,
+    detail
+  };
+};
+
+// เพิ่มฟังก์ชันสร้าง damage level ใหม่
+export const createDamageLevel = async (damageData) => {
+  const { name, fine_percent, detail } = damageData;
+  
+  const [result] = await db.query(
+    'INSERT INTO damage_levels (name, fine_percent, detail) VALUES (?, ?, ?)',
+    [name, fine_percent, detail]
+  );
+  
+  return {
+    damage_id: result.insertId,
+    name,
+    fine_percent,
+    detail
+  };
+};
