@@ -393,3 +393,30 @@ export const updateBorrowerLocation = async (borrow_id, locationData) => {
     throw error;
   }
 };
+
+// อัปเดตตำแหน่งผู้ยืมพร้อมเวลาไทย (UTC+7)
+export const updateBorrowerLocationWithThaiTime = async (borrow_id, locationData, thaiTimeString) => {
+  console.log('=== updateBorrowerLocationWithThaiTime Model Debug ===');
+  console.log('borrow_id:', borrow_id);
+  console.log('locationData:', locationData);
+  console.log('thaiTimeString:', thaiTimeString);
+
+  try {
+    // แปลงข้อมูลตำแหน่งเป็น JSON string
+    const locationJson = JSON.stringify(locationData);
+
+    // อัปเดตข้อมูลตำแหน่งและเวลาอัปเดตล่าสุดเป็นเวลาไทย
+    const [result] = await db.query(
+      'UPDATE borrow_transactions SET borrower_location = ?, last_location_update = ? WHERE borrow_id = ?',
+      [locationJson, thaiTimeString, borrow_id]
+    );
+
+    console.log('Database update result:', result);
+    console.log('Affected rows:', result.affectedRows);
+
+    return result;
+  } catch (error) {
+    console.error('Error in updateBorrowerLocationWithThaiTime model:', error);
+    throw error;
+  }
+};
