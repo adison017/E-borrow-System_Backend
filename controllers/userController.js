@@ -1,4 +1,3 @@
-
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import multer from 'multer';
@@ -1229,7 +1228,7 @@ const userController = {
         role,
         deviceFingerprint: deviceInfo.fingerprint,
         loginTime: Date.now()
-      }, JWT_SECRET, { expiresIn: '45m' });
+      }, JWT_SECRET, { expiresIn: '60m' });
 
       const refreshToken = jwt.sign({ user_id: user.user_id, tokenId: crypto.randomUUID() }, REFRESH_SECRET, { expiresIn: '7d' });
 

@@ -1,5 +1,13 @@
 import express from 'express';
-import * as borrowController from '../controllers/borrowController.js';
+import {
+  getAllBorrows,
+  getBorrowById,
+  createBorrow,
+  updateBorrowStatus,
+  deleteBorrow,
+  updateBorrowerLocation,
+  checkLocationTrackingStatus
+} from '../controllers/borrowController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { uploadImportantDocumentsWithCustomName } from '../utils/cloudinaryUtils.js';
 const router = express.Router();
@@ -7,10 +15,14 @@ const router = express.Router();
 // Protect all borrow routes
 router.use(authMiddleware);
 
-router.post('/', uploadImportantDocumentsWithCustomName, borrowController.createBorrow);
-router.get('/', borrowController.getAllBorrows);
-router.get('/:id', borrowController.getBorrowById);
-router.put('/:id/status', borrowController.updateBorrowStatus);
-router.delete('/:id', borrowController.deleteBorrow);
+router.post('/', uploadImportantDocumentsWithCustomName, createBorrow);
+router.get('/', getAllBorrows);
+router.get('/:id', getBorrowById);
+router.put('/:id/status', updateBorrowStatus);
+router.put('/:id/location', updateBorrowerLocation);
+router.delete('/:id', deleteBorrow);
+
+// เพิ่ม route สำหรับตรวจสอบสถานะการติดตาม
+router.get('/location-tracking-status/:user_id', authMiddleware, checkLocationTrackingStatus);
 
 export default router;
