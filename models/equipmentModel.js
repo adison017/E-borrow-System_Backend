@@ -3,7 +3,11 @@ import connection from '../db.js';
 export const getAllEquipment = async () => {
   try {
     console.log('getAllEquipment - Fetching all equipment...');
-    const [rows] = await connection.query('SELECT * FROM equipment');
+    const [rows] = await connection.query(`
+      SELECT e.*, c.name as category_name, c.category_code 
+      FROM equipment e 
+      LEFT JOIN category c ON e.category_id = c.category_id
+    `);
     console.log('getAllEquipment - Total equipment found:', rows.length);
     console.log('getAllEquipment - Item codes:', rows.map(item => item.item_code));
     return rows;
@@ -17,7 +21,12 @@ export const getAllEquipment = async () => {
 export const getEquipmentByCode = async (item_code) => {
   try {
     console.log('getEquipmentByCode - Searching for item_code:', item_code);
-    const [rows] = await connection.query('SELECT * FROM equipment WHERE item_code = ?', [item_code]);
+    const [rows] = await connection.query(`
+      SELECT e.*, c.name as category_name, c.category_code 
+      FROM equipment e 
+      LEFT JOIN category c ON e.category_id = c.category_id 
+      WHERE e.item_code = ?
+    `, [item_code]);
     console.log('getEquipmentByCode - Found rows:', rows.length);
     if (rows.length > 0) {
       console.log('getEquipmentByCode - First row item_code:', rows[0].item_code);
@@ -33,10 +42,10 @@ export const addEquipment = async (equipment) => {
   try {
     // Always use item_code as canonical code
     const item_code = equipment.item_code || equipment.id || equipment.item_id;
-    const { name, category, description, quantity, unit, status, pic, price, purchaseDate, room_id } = equipment;
+    const { name, category, category_id, description, quantity, unit, status, pic, price, purchaseDate, room_id } = equipment;
     const [result] = await connection.query(
-      'INSERT INTO equipment (item_code, name, category, description, quantity, unit, status, pic, created_at, price, purchaseDate, room_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?, ?, ?)',
-      [item_code, name, category, description, quantity, unit, status, pic, price, purchaseDate, room_id]
+      'INSERT INTO equipment (item_code, name, category, category_id, description, quantity, unit, status, pic, created_at, price, purchaseDate, room_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), ?, ?, ?)',
+      [item_code, name, category, category_id, description, quantity, unit, status, pic, price, purchaseDate, room_id]
     );
     return result;
   } catch (error) {
@@ -49,7 +58,12 @@ export const addEquipment = async (equipment) => {
 export const getEquipmentByItemId = async (item_id) => {
   try {
     console.log('getEquipmentByItemId - Searching for item_id:', item_id);
-    const [rows] = await connection.query('SELECT * FROM equipment WHERE item_id = ?', [item_id]);
+    const [rows] = await connection.query(`
+      SELECT e.*, c.name as category_name, c.category_code 
+      FROM equipment e 
+      LEFT JOIN category c ON e.category_id = c.category_id 
+      WHERE e.item_id = ?
+    `, [item_id]);
     console.log('getEquipmentByItemId - Found rows:', rows.length);
     if (rows.length > 0) {
       console.log('getEquipmentByItemId - First row item_id:', rows[0].item_id);
@@ -66,7 +80,7 @@ export const updateEquipmentByItemId = async (item_id, equipment) => {
     console.log('updateEquipmentByItemId Model - Equipment item_id:', item_id);
     console.log('updateEquipmentByItemId Model - Equipment data:', equipment);
 
-    const { item_code, name, category, description, quantity, unit, status, pic, purchaseDate, price, room_id } = equipment;
+    const { item_code, name, category, category_id, description, quantity, unit, status, pic, purchaseDate, price, room_id } = equipment;
 
     console.log('updateEquipmentByItemId Model - New item code:', item_code);
 
@@ -82,8 +96,8 @@ export const updateEquipmentByItemId = async (item_id, equipment) => {
 
     console.log('updateEquipmentByItemId Model - Executing UPDATE query...');
     const [result] = await connection.query(
-      'UPDATE equipment SET item_code=?, name=?, category=?, description=?, quantity=?, unit=?, status=?, pic=?, purchaseDate=?, price=?, room_id=? WHERE item_id=?',
-      [item_code, name, category, description, quantity, unit, status, pic, purchaseDate, price, room_id, item_id]
+      'UPDATE equipment SET item_code=?, name=?, category=?, category_id=?, description=?, quantity=?, unit=?, status=?, pic=?, purchaseDate=?, price=?, room_id=? WHERE item_id=?',
+      [item_code, name, category, category_id, description, quantity, unit, status, pic, purchaseDate, price, room_id, item_id]
     );
     console.log('updateEquipmentByItemId Model - Update result:', result);
     return result;
@@ -135,6 +149,8 @@ export const getAllEquipmentWithDueDate = async () => {
     const [rows] = await connection.query(`
       SELECT
         e.*,
+        c.name as category_name,
+        c.category_code,
         (
           SELECT bt.return_date
           FROM borrow_items bi
@@ -143,6 +159,7 @@ export const getAllEquipmentWithDueDate = async () => {
           ORDER BY bt.return_date DESC LIMIT 1
         ) AS dueDate
       FROM equipment e
+      LEFT JOIN category c ON e.category_id = c.category_id
     `);
     return rows;
   } catch (error) {
