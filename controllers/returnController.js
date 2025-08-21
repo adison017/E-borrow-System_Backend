@@ -644,6 +644,111 @@ export const confirmPayment = async (req, res) => {
     const affected = await updateProofImageAndPayStatus(borrow_id, proof_image, cloudinary_public_id);
     console.log('[confirm-payment] affected:', affected);
     if (affected > 0) {
+      // === เพิ่มการส่ง LINE Notify เมื่อชำระเงินออนไลน์เสร็จสิ้น ===
+      try {
+        const borrow = await BorrowModel.getBorrowById(borrow_id);
+        const user = await User.findById(borrow.user_id);
+        console.log('[DEBUG] LINE Notify user for online payment:', {
+          user_id: user?.user_id,
+          line_id: user?.line_id,
+          line_notify_enabled: user?.line_notify_enabled,
+          type: typeof user?.line_notify_enabled
+        });
+        
+        if (user?.line_id && isLineNotifyEnabled(user.line_notify_enabled)) {
+          const message = {
+            type: 'flex',
+            altText: `การชำระเงินออนไลน์เสร็จสิ้น รหัสการยืม: ${borrow.borrow_code} ขอบคุณที่ใช้บริการ`,
+            contents: {
+              type: 'bubble',
+              header: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#0A8F08',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '✅ การชำระเงินเสร็จสิ้น',
+                    weight: 'bold',
+                    size: 'xl',
+                    color: '#ffffff',
+                    align: 'center'
+                  }
+                ]
+              },
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'md',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'รายการยืมเสร็จสิ้นแล้ว',
+                    weight: 'bold',
+                    size: 'lg',
+                    color: '#222222',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: `รหัสการยืม: ${borrow.borrow_code}`,
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: 'การชำระเงินออนไลน์ของคุณเสร็จสิ้นแล้ว ขอบคุณที่ใช้บริการระบบยืมคืนครุภัณฑ์',
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center',
+                    wrap: true
+                  }
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    color: '#0A8F08',
+                    action: {
+                      type: 'uri',
+                      label: 'ติชมระบบ',
+                      uri: 'https://e-borrow-system.vercel.app'
+                    }
+                  },
+                  {
+                    type: 'text',
+                    text: '🙏 ขอขอบคุณสำหรับข้อเสนอแนะของท่าน',
+                    size: 'xs',
+                    color: '#888888',
+                    align: 'center',
+                    margin: 'sm',
+                    wrap: true
+                  }
+                ]
+              }
+            }
+          };
+          
+          console.log(`[LINE Notify] Preparing to send online payment success to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          try {
+            await sendLineNotify(user.line_id, message);
+            console.log(`[LINE Notify] Online payment success sent successfully to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          } catch (err) {
+            console.error('[LINE Notify] Error sending online payment success message:', err, err.response?.data);
+          }
+        } else {
+          console.log(`[LINE Notify] Not sending online payment success to user_id=${user?.user_id} because line_notify_enabled=${user?.line_notify_enabled}`);
+        }
+      } catch (notifyErr) {
+        console.error('[confirm-payment] Error sending LINE notification:', notifyErr);
+        // ไม่ throw error เพราะการส่ง notification ไม่ควรทำให้การชำระเงินล้มเหลว
+      }
+      
       res.json({ success: true });
     } else {
       console.log('[confirm-payment] Return not found for borrow_id:', borrow_id);
@@ -680,6 +785,115 @@ export const adminApproveSlip = async (req, res) => {
     const { return_id } = req.params;
     if (!return_id) return res.status(400).json({ success: false, message: 'Missing return_id' });
     await approvePaymentByReturnId(return_id);
+    
+    // === เพิ่มการส่ง LINE Notify เมื่อแอดมินอนุมัติสลิป ===
+    try {
+      const ret = await ReturnModel.getReturnById(return_id);
+      if (ret && ret.borrow_id) {
+        const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+        const user = await User.findById(borrow.user_id);
+        console.log('[DEBUG] LINE Notify user for admin approved slip:', {
+          user_id: user?.user_id,
+          line_id: user?.line_id,
+          line_notify_enabled: user?.line_notify_enabled,
+          type: typeof user?.line_notify_enabled
+        });
+        
+        if (user?.line_id && isLineNotifyEnabled(user.line_notify_enabled)) {
+          const message = {
+            type: 'flex',
+            altText: `การชำระเงินได้รับการอนุมัติ รหัสการยืม: ${borrow.borrow_code} ขอบคุณที่ใช้บริการ`,
+            contents: {
+              type: 'bubble',
+              header: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#0A8F08',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '✅ การชำระเงินได้รับการอนุมัติ',
+                    weight: 'bold',
+                    size: 'xl',
+                    color: '#ffffff',
+                    align: 'center'
+                  }
+                ]
+              },
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'md',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'รายการยืมเสร็จสิ้นแล้ว',
+                    weight: 'bold',
+                    size: 'lg',
+                    color: '#222222',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: `รหัสการยืม: ${borrow.borrow_code}`,
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: 'สลิปการชำระเงินของคุณได้รับการอนุมัติแล้ว ขอบคุณที่ใช้บริการระบบยืมคืนครุภัณฑ์',
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center',
+                    wrap: true
+                  }
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    color: '#0A8F08',
+                    action: {
+                      type: 'uri',
+                      label: 'ติชมระบบ',
+                      uri: 'https://e-borrow-system.vercel.app'
+                    }
+                  },
+                  {
+                    type: 'text',
+                    text: '🙏 ขอขอบคุณสำหรับข้อเสนอแนะของท่าน',
+                    size: 'xs',
+                    color: '#888888',
+                    align: 'center',
+                    margin: 'sm',
+                    wrap: true
+                  }
+                ]
+              }
+            }
+          };
+          
+          console.log(`[LINE Notify] Preparing to send admin approved slip to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          try {
+            await sendLineNotify(user.line_id, message);
+            console.log(`[LINE Notify] Admin approved slip sent successfully to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          } catch (err) {
+            console.error('[LINE Notify] Error sending admin approved slip message:', err, err.response?.data);
+          }
+        } else {
+          console.log(`[LINE Notify] Not sending admin approved slip to user_id=${user?.user_id} because line_notify_enabled=${user?.line_notify_enabled}`);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('[adminApproveSlip] Error sending LINE notification:', notifyErr);
+      // ไม่ throw error เพราะการส่ง notification ไม่ควรทำให้การอนุมัติล้มเหลว
+    }
+    
     // After marking paid/completed, update equipment statuses
     try {
       const ret = await ReturnModel.getReturnById(return_id);
@@ -731,6 +945,115 @@ export const adminRejectSlip = async (req, res) => {
     const { reason } = req.body || {};
     if (!return_id) return res.status(400).json({ success: false, message: 'Missing return_id' });
     await rejectSlipByReturnId(return_id, reason || null);
+    
+    // === เพิ่มการส่ง LINE Notify เมื่อแอดมินปฏิเสธสลิป ===
+    try {
+      const ret = await ReturnModel.getReturnById(return_id);
+      if (ret && ret.borrow_id) {
+        const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+        const user = await User.findById(borrow.user_id);
+        console.log('[DEBUG] LINE Notify user for admin rejected slip:', {
+          user_id: user?.user_id,
+          line_id: user?.line_id,
+          line_notify_enabled: user?.line_notify_enabled,
+          type: typeof user?.line_notify_enabled
+        });
+        
+        if (user?.line_id && isLineNotifyEnabled(user.line_notify_enabled)) {
+          const message = {
+            type: 'flex',
+            altText: `สลิปการชำระเงินไม่ถูกต้อง รหัสการยืม: ${borrow.borrow_code} กรุณาอัปโหลดใหม่`,
+            contents: {
+              type: 'bubble',
+              header: {
+                type: 'box',
+                layout: 'vertical',
+                backgroundColor: '#FF6B6B',
+                contents: [
+                  {
+                    type: 'text',
+                    text: '⚠️ สลิปไม่ถูกต้อง',
+                    weight: 'bold',
+                    size: 'xl',
+                    color: '#ffffff',
+                    align: 'center'
+                  }
+                ]
+              },
+              body: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'md',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'กรุณาอัปโหลดสลิปใหม่',
+                    weight: 'bold',
+                    size: 'lg',
+                    color: '#222222',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: `รหัสการยืม: ${borrow.borrow_code}`,
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center'
+                  },
+                  {
+                    type: 'text',
+                    text: reason ? `เหตุผล: ${reason}` : 'กรุณาตรวจสอบสลิปและอัปโหลดใหม่',
+                    size: 'sm',
+                    color: '#666666',
+                    align: 'center',
+                    wrap: true
+                  }
+                ]
+              },
+              footer: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                  {
+                    type: 'button',
+                    style: 'primary',
+                    color: '#FF6B6B',
+                    action: {
+                      type: 'uri',
+                      label: 'อัปโหลดสลิปใหม่',
+                      uri: 'https://e-borrow-system.vercel.app'
+                    }
+                  },
+                  {
+                    type: 'text',
+                    text: 'กรุณาเข้าสู่ระบบเพื่ออัปโหลดสลิปใหม่',
+                    size: 'xs',
+                    color: '#888888',
+                    align: 'center',
+                    margin: 'sm',
+                    wrap: true
+                  }
+                ]
+              }
+            }
+          };
+          
+          console.log(`[LINE Notify] Preparing to send admin rejected slip to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          try {
+            await sendLineNotify(user.line_id, message);
+            console.log(`[LINE Notify] Admin rejected slip sent successfully to line_id=${user.line_id}, borrow_id=${borrow.borrow_id}`);
+          } catch (err) {
+            console.error('[LINE Notify] Error sending admin rejected slip message:', err, err.response?.data);
+          }
+        } else {
+          console.log(`[LINE Notify] Not sending admin rejected slip to user_id=${user?.user_id} because line_notify_enabled=${user?.line_notify_enabled}`);
+        }
+      }
+    } catch (notifyErr) {
+      console.error('[adminRejectSlip] Error sending LINE notification:', notifyErr);
+      // ไม่ throw error เพราะการส่ง notification ไม่ควรทำให้การปฏิเสธล้มเหลว
+    }
+    
     return res.json({ success: true });
   } catch (err) {
     console.error('[adminRejectSlip] error:', err);
