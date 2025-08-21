@@ -377,12 +377,11 @@ export const updateBorrowerLocation = async (borrow_id, locationData) => {
   try {
     // แปลงข้อมูลตำแหน่งเป็น JSON string
     const locationJson = JSON.stringify(locationData);
-    const currentTimestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
 
-    // อัปเดตข้อมูลตำแหน่งและเวลาอัปเดตล่าสุด
+    // อัปเดตข้อมูลตำแหน่งและเวลาอัปเดตล่าสุด (ใช้ NOW() แทน timestamp จาก client)
     const [result] = await db.query(
-      'UPDATE borrow_transactions SET borrower_location = ?, last_location_update = ? WHERE borrow_id = ?',
-      [locationJson, currentTimestamp, borrow_id]
+      'UPDATE borrow_transactions SET borrower_location = ?, last_location_update = NOW() WHERE borrow_id = ?',
+      [locationJson, borrow_id]
     );
 
     console.log('Database update result:', result);

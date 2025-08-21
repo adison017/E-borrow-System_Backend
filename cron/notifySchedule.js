@@ -212,7 +212,7 @@ const startLocationTrackingCron = () => {
           u.email
         FROM borrow_transactions bt
         JOIN users u ON bt.user_id = u.user_id
-        WHERE bt.status IN ('approved', 'carry', 'overdue')
+        WHERE bt.status IN ('approved', 'carry')
         AND bt.borrower_location IS NOT NULL
         AND bt.last_location_update IS NOT NULL
       `);
@@ -230,16 +230,16 @@ const startLocationTrackingCron = () => {
         if (minutesDiff > 1) {
           console.log(`Location Tracking Cron: Borrow ${borrow.borrow_id} last update was ${minutesDiff} minutes ago`);
           
-          // อัพเดทสถานะเป็น overdue ถ้าผ่านไปนานเกินไป
+          // อัพเดทสถานะเป็น carry ถ้าผ่านไปนานเกินไป (แทน overdue)
           if (minutesDiff > 30) { // 30 นาที
             await db.execute(`
               UPDATE borrow_transactions 
-              SET status = 'overdue', 
+              SET status = 'carry', 
                   last_location_update = NOW()
               WHERE borrow_id = ?
             `, [borrow.borrow_id]);
             
-            console.log(`Location Tracking Cron: Marked borrow ${borrow.borrow_id} as overdue`);
+            console.log(`Location Tracking Cron: Updated borrow ${borrow.borrow_id} status to carry`);
           }
         }
       }
