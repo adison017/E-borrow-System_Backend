@@ -1095,16 +1095,22 @@ export const updateBorrowerLocation = async (req, res) => {
       });
     }
 
-    // สร้างข้อมูลตำแหน่งในรูปแบบ JSON (ไม่รวม timestamp เพราะใช้ NOW() ใน SQL)
+    // สร้างเวลาไทย (UTC+7)
+    const thaiTime = new Date();
+    thaiTime.setHours(thaiTime.getHours() + 7);
+    const thaiTimeString = thaiTime.toISOString().slice(0, 19).replace('T', ' ');
+
+    // สร้างข้อมูลตำแหน่งในรูปแบบ JSON พร้อมเวลาไทย
     const locationData = {
       latitude: parseFloat(latitude),
       longitude: parseFloat(longitude),
       accuracy: accuracy ? parseFloat(accuracy) : null,
-      address: address || null
+      address: address || null,
+      timestamp: thaiTimeString
     };
 
-    // อัปเดตตำแหน่งในฐานข้อมูล
-    const result = await BorrowModel.updateBorrowerLocation(id, locationData);
+    // อัปเดตตำแหน่งในฐานข้อมูลพร้อมเวลาไทย
+    const result = await BorrowModel.updateBorrowerLocationWithThaiTime(id, locationData, thaiTimeString);
     
     if (result.affectedRows === 0) {
       return res.status(400).json({
@@ -1115,6 +1121,7 @@ export const updateBorrowerLocation = async (req, res) => {
 
     console.log('Location update completed successfully!');
     console.log('Updated location data:', locationData);
+    console.log('Thai time:', thaiTimeString);
 
     res.json({
       success: true,
@@ -1122,7 +1129,7 @@ export const updateBorrowerLocation = async (req, res) => {
       data: {
         borrow_id: id,
         location: locationData,
-        updated_at: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+        updated_at: thaiTimeString
       }
     });
 
