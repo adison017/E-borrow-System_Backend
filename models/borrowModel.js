@@ -377,7 +377,7 @@ export const updateBorrowerLocation = async (borrow_id, locationData) => {
   try {
     // แปลงข้อมูลตำแหน่งเป็น JSON string
     const locationJson = JSON.stringify(locationData);
-    const currentTimestamp = new Date();
+    const currentTimestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
 
     // อัปเดตข้อมูลตำแหน่งและเวลาอัปเดตล่าสุด
     const [result] = await db.query(

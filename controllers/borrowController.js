@@ -1100,7 +1100,7 @@ export const updateBorrowerLocation = async (req, res) => {
       longitude: parseFloat(longitude),
       accuracy: accuracy ? parseFloat(accuracy) : null,
       address: address || null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
     };
 
     // อัปเดตตำแหน่งในฐานข้อมูล
@@ -1122,7 +1122,7 @@ export const updateBorrowerLocation = async (req, res) => {
       data: {
         borrow_id: id,
         location: locationData,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
       }
     });
 
