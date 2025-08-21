@@ -1063,3 +1063,128 @@ export const deleteBorrow = async (req, res) => {
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
   }
 };
+
+// อัปเดตตำแหน่งผู้ยืม
+export const updateBorrowerLocation = async (req, res) => {
+  const { id } = req.params;
+  const { latitude, longitude, accuracy, address } = req.body;
+
+  console.log('=== updateBorrowerLocation Debug ===');
+  console.log('borrow_id:', id);
+  console.log('latitude:', latitude);
+  console.log('longitude:', longitude);
+  console.log('accuracy:', accuracy);
+  console.log('address:', address);
+
+  try {
+    // ตรวจสอบข้อมูลที่จำเป็น
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        message: 'กรุณาระบุตำแหน่ง (latitude และ longitude)',
+        error: 'Missing required location data'
+      });
+    }
+
+    // ตรวจสอบว่า borrow_id มีอยู่จริง
+    const borrow = await BorrowModel.getBorrowById(id);
+    if (!borrow) {
+      return res.status(404).json({
+        message: 'ไม่พบรายการการยืมที่ระบุ',
+        error: 'Borrow not found'
+      });
+    }
+
+    // สร้างข้อมูลตำแหน่งในรูปแบบ JSON
+    const locationData = {
+      latitude: parseFloat(latitude),
+      longitude: parseFloat(longitude),
+      accuracy: accuracy ? parseFloat(accuracy) : null,
+      address: address || null,
+      timestamp: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+    };
+
+    // อัปเดตตำแหน่งในฐานข้อมูล
+    const result = await BorrowModel.updateBorrowerLocation(id, locationData);
+    
+    if (result.affectedRows === 0) {
+      return res.status(400).json({
+        message: 'ไม่สามารถอัปเดตตำแหน่งได้',
+        error: 'No rows affected'
+      });
+    }
+
+    console.log('Location update completed successfully!');
+    console.log('Updated location data:', locationData);
+
+    res.json({
+      success: true,
+      message: 'อัปเดตตำแหน่งสำเร็จ',
+      data: {
+        borrow_id: id,
+        location: locationData,
+        updated_at: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+      }
+    });
+
+  } catch (err) {
+    console.error('Error in updateBorrowerLocation:', err);
+    res.status(500).json({
+      message: 'เกิดข้อผิดพลาดในการอัปเดตตำแหน่ง',
+      error: err.message
+    });
+  }
+};
+
+// ตรวจสอบสถานะการติดตามตำแหน่ง
+export const checkLocationTrackingStatus = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    
+    // ดึงรายการยืมที่ active ของ user
+    const [activeBorrows] = await db.execute(`
+      SELECT 
+        borrow_id,
+        status,
+        borrower_location,
+        last_location_update,
+        created_at
+      FROM borrow_transactions 
+      WHERE user_id = ? 
+      AND status IN ('approved', 'carry', 'overdue')
+      ORDER BY created_at DESC
+    `, [user_id]);
+    
+    const trackingStatus = activeBorrows.map(borrow => {
+      const lastUpdate = borrow.last_location_update ? new Date(borrow.last_location_update) : null;
+      const now = new Date();
+      const minutesDiff = lastUpdate ? Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60)) : null;
+      
+      return {
+        borrow_id: borrow.borrow_id,
+        status: borrow.status,
+        has_location: !!borrow.borrower_location,
+        last_update: borrow.last_location_update,
+        minutes_since_update: minutesDiff,
+        is_tracking_active: minutesDiff !== null && minutesDiff <= 5 // ถ้าอัพเดทภายใน 5 นาทีถือว่าติดตามอยู่
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        user_id,
+        active_borrows: trackingStatus,
+        total_active: activeBorrows.length,
+        is_tracking: activeBorrows.length > 0 && trackingStatus.some(b => b.is_tracking_active)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error checking location tracking status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'เกิดข้อผิดพลาดในการตรวจสอบสถานะการติดตาม',
+      error: error.message
+    });
+  }
+};

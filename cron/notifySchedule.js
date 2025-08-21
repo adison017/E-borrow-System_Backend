@@ -3,6 +3,8 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { getActiveBorrows } from '../models/borrowModel.js';
 import { formatDate, getDaysBetween, getDaysRemaining } from '../utils/dateHelper.js';
+import mysql from 'mysql2/promise';
+import db from '../db.js';
 dotenv.config();
 
 // ตรวจสอบ environment variables สำหรับ LINE Bot
@@ -189,4 +191,76 @@ cron.schedule('29 0 * * *', async () => {
   }
 }, { timezone: 'Asia/Bangkok' });
 
-// export default cron; // ไม่จำเป็นต้อง export ถ้าไม่ได้ import ไปใช้ที่อื่น
+// เพิ่ม Location Tracking Cron Job
+const startLocationTrackingCron = () => {
+  console.log('Starting Location Tracking Cron Job...');
+  
+  // ตรวจสอบและอัพเดทตำแหน่งทุก 1 นาที
+  cron.schedule('*/1 * * * *', async () => {
+    try {
+      console.log('Location Tracking Cron: Checking for active borrows...');
+      
+      // ดึงรายการยืมที่ active และมีข้อมูลตำแหน่ง
+      const [activeBorrows] = await db.execute(`
+        SELECT 
+          bt.borrow_id,
+          bt.user_id,
+          bt.status,
+          bt.borrower_location,
+          bt.last_location_update,
+          u.username,
+          u.email
+        FROM borrow_transactions bt
+        JOIN users u ON bt.user_id = u.user_id
+        WHERE bt.status IN ('approved', 'carry', 'overdue')
+        AND bt.borrower_location IS NOT NULL
+        AND bt.last_location_update IS NOT NULL
+      `);
+      
+      console.log(`Location Tracking Cron: Found ${activeBorrows.length} active borrows`);
+      
+      // ตรวจสอบแต่ละรายการ
+      for (const borrow of activeBorrows) {
+        const lastUpdate = new Date(borrow.last_location_update);
+        const now = new Date();
+        const timeDiff = now.getTime() - lastUpdate.getTime();
+        const minutesDiff = Math.floor(timeDiff / (1000 * 60));
+        
+        // ถ้าผ่านไปมากกว่า 1 นาที ให้อัพเดทสถานะ
+        if (minutesDiff > 1) {
+          console.log(`Location Tracking Cron: Borrow ${borrow.borrow_id} last update was ${minutesDiff} minutes ago`);
+          
+          // อัพเดทสถานะเป็น overdue ถ้าผ่านไปนานเกินไป
+          if (minutesDiff > 30) { // 30 นาที
+            await db.execute(`
+              UPDATE borrow_transactions 
+              SET status = 'overdue', 
+                  last_location_update = NOW()
+              WHERE borrow_id = ?
+            `, [borrow.borrow_id]);
+            
+            console.log(`Location Tracking Cron: Marked borrow ${borrow.borrow_id} as overdue`);
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Location Tracking Cron Error:', error);
+    }
+  });
+  
+  console.log('Location Tracking Cron Job started successfully');
+};
+
+// เพิ่ม Notification Cron Job function
+const startNotificationCron = () => {
+  console.log('Starting Notification Cron Job...');
+  // Notification cron job is already scheduled above with cron.schedule('29 0 * * *', ...)
+  console.log('Notification Cron Job started successfully');
+};
+
+// เริ่มต้น cron jobs
+startLocationTrackingCron();
+startNotificationCron();
+
+export { startNotificationCron, startLocationTrackingCron };

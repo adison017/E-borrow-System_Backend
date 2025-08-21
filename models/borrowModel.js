@@ -44,6 +44,8 @@ export const getAllBorrows = async () => {
   bt.signature_image,
   bt.handover_photo,
   bt.important_documents,
+  COALESCE(bt.borrower_location, NULL) as borrower_location,
+  COALESCE(bt.last_location_update, NULL) as last_location_update,
   ret.pay_status,
   ret.payment_method
 FROM borrow_transactions bt
@@ -89,7 +91,9 @@ LEFT JOIN (
         rejection_reason: row.rejection_reason,
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
-        important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+        important_documents: row.important_documents ? (typeof row.important_documents === 'string' ? JSON.parse(row.important_documents) : row.important_documents) : [],
+        borrower_location: row.borrower_location ? (typeof row.borrower_location === 'string' ? JSON.parse(row.borrower_location) : row.borrower_location) : null,
+        last_location_update: row.last_location_update,
         pay_status: row.pay_status,
         payment_method: row.payment_method,
       };
@@ -137,7 +141,9 @@ export const getBorrowById = async (borrow_id) => {
       bt.rejection_reason,
       bt.signature_image,
       bt.handover_photo,
-      bt.important_documents
+      bt.important_documents,
+      COALESCE(bt.borrower_location, NULL) as borrower_location,
+      COALESCE(bt.last_location_update, NULL) as last_location_update
     FROM borrow_transactions bt
     JOIN users u ON bt.user_id = u.user_id
     JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -181,7 +187,9 @@ export const getBorrowById = async (borrow_id) => {
     rejection_reason: row.rejection_reason,
     signature_image: row.signature_image,
     handover_photo: row.handover_photo,
-    important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+    important_documents: row.important_documents ? (typeof row.important_documents === 'string' ? JSON.parse(row.important_documents) : row.important_documents) : [],
+    borrower_location: row.borrower_location ? (typeof row.borrower_location === 'string' ? JSON.parse(row.borrower_location) : row.borrower_location) : null,
+    last_location_update: row.last_location_update,
   };
   return borrow;
 };
@@ -281,6 +289,8 @@ export const getBorrowsByStatus = async (statusArray) => {
       bt.signature_image,
       bt.handover_photo,
       bt.important_documents,
+      COALESCE(bt.borrower_location, NULL) as borrower_location,
+      COALESCE(bt.last_location_update, NULL) as last_location_update,
       ret.proof_image,
       ret.pay_status,
       ret.payment_method
@@ -327,7 +337,9 @@ export const getBorrowsByStatus = async (statusArray) => {
         rejection_reason: row.rejection_reason,
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
-        important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+        important_documents: row.important_documents ? (typeof row.important_documents === 'string' ? JSON.parse(row.important_documents) : row.important_documents) : [],
+        borrower_location: row.borrower_location ? (typeof row.borrower_location === 'string' ? JSON.parse(row.borrower_location) : row.borrower_location) : null,
+        last_location_update: row.last_location_update,
         proof_image: row.proof_image,
         pay_status: row.pay_status,
         payment_method: row.payment_method
@@ -354,4 +366,31 @@ export const getActiveBorrows = async () => {
      WHERE bt.status IN ('approved','carry')`
   );
   return rows;
+};
+
+// อัปเดตตำแหน่งผู้ยืม
+export const updateBorrowerLocation = async (borrow_id, locationData) => {
+  console.log('=== updateBorrowerLocation Model Debug ===');
+  console.log('borrow_id:', borrow_id);
+  console.log('locationData:', locationData);
+
+  try {
+    // แปลงข้อมูลตำแหน่งเป็น JSON string
+    const locationJson = JSON.stringify(locationData);
+    const currentTimestamp = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+
+    // อัปเดตข้อมูลตำแหน่งและเวลาอัปเดตล่าสุด
+    const [result] = await db.query(
+      'UPDATE borrow_transactions SET borrower_location = ?, last_location_update = ? WHERE borrow_id = ?',
+      [locationJson, currentTimestamp, borrow_id]
+    );
+
+    console.log('Database update result:', result);
+    console.log('Affected rows:', result.affectedRows);
+
+    return result;
+  } catch (error) {
+    console.error('Error in updateBorrowerLocation model:', error);
+    throw error;
+  }
 };
