@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import * as Equipment from '../models/equipmentModel.js';
 import { getPicUrl } from '../utils/imageUtils.js';
+import { saveBase64Image } from '../utils/saveBase64Image.js';
 
 export const getAllEquipment = async (req, res) => {
   try {
@@ -48,33 +49,43 @@ export const getEquipmentByCode = async (req, res) => {
 export const addEquipment = async (req, res) => {
   try {
     const data = req.body;
-    // Generate item_code อัตโนมัติ
-    let lastCode = await Equipment.getLastItemCode();
-    let nextNumber = 1;
-    if (lastCode) {
-      const match = lastCode.match(/EQ-(\d{3})/);
-      if (match) {
-        nextNumber = parseInt(match[1], 10) + 1;
-      }
+    
+    // ตรวจสอบว่ามี item_code หรือไม่
+    if (!data.item_code || data.item_code.trim() === '') {
+      return res.status(400).json({ error: 'กรุณากรอกรหัสครุภัณฑ์' });
     }
-    const newItemCode = `EQ-${String(nextNumber).padStart(3, '0')}`;
-    // ตรวจสอบซ้ำอีกชั้น
-    const exist = await Equipment.getEquipmentByCode(newItemCode);
+    
+    // ตรวจสอบ item_code ซ้ำ
+    const exist = await Equipment.getEquipmentByCode(data.item_code.trim());
     if (exist && exist.length > 0) {
-      return res.status(400).json({ error: 'item_code ซ้ำในระบบ' });
+      return res.status(400).json({ error: 'รหัสครุภัณฑ์นี้มีอยู่แล้วในระบบ' });
     }
-    data.item_code = newItemCode;
+    
+    // ใช้ item_code ที่ user กรอก
+    data.item_code = data.item_code.trim();
+    
     if (data.pic && typeof data.pic === 'string') {
       if (!data.pic.startsWith('http')) {
         data.pic = `http://localhost:5000/uploads/${data.pic.replace(/^\/?uploads\//, '')}`;
       }
     }
+    
+    // Set default values for null fields
+    data.name = data.name || '';
+    data.category = data.category || '';
+    data.category_id = data.category_id || null;
+    data.description = data.description || '';
+    data.quantity = data.quantity || 0;
+    data.unit = data.unit || '';
+    data.status = data.status || 'available';
     data.purchaseDate = data.purchaseDate || null;
-    data.price = data.price || null;
-    data.room_id = data.room_id || null;
+    data.price = data.price || 0;
+    data.room_id = data.room_id || '';
+    
     await Equipment.addEquipment(data);
-    res.status(201).json({ message: 'Equipment added', item_code: data.item_code });
+    res.status(201).json({ message: 'เพิ่มครุภัณฑ์สำเร็จ', item_code: data.item_code });
   } catch (err) {
+    console.error('Error in addEquipment:', err);
     res.status(500).json({ error: err.message });
   }
 };
@@ -109,6 +120,7 @@ export const updateEquipment = async (req, res) => {
     // Set default values for null fields
     data.name = data.name || '';
     data.category = data.category || '';
+    data.category_id = data.category_id || null;
     data.description = data.description || '';
     data.quantity = data.quantity || 0;
     data.unit = data.unit || '';
