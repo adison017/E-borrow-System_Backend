@@ -7,6 +7,7 @@ import { broadcastBadgeCounts } from '../index.js';
 import * as RepairRequest from '../models/repairRequestModel.js';
 import * as ContactInfoModel from '../models/contactInfoModel.js';
 import { createImportantDocumentsUpload } from '../utils/cloudinaryUtils.js';
+import db from '../db.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -1094,13 +1095,12 @@ export const updateBorrowerLocation = async (req, res) => {
       });
     }
 
-    // สร้างข้อมูลตำแหน่งในรูปแบบ JSON
+    // สร้างข้อมูลตำแหน่งในรูปแบบ JSON (ไม่รวม timestamp เพราะใช้ NOW() ใน SQL)
     const locationData = {
       latitude: parseFloat(latitude),
       longitude: parseFloat(longitude),
       accuracy: accuracy ? parseFloat(accuracy) : null,
-      address: address || null,
-      timestamp: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+      address: address || null
     };
 
     // อัปเดตตำแหน่งในฐานข้อมูล
