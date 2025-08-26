@@ -36,9 +36,10 @@ export async function countPendingReturn() {
   const [rows] = await db.query("SELECT COUNT(*) AS count FROM borrow_transactions WHERE status = 'approved'");
   return rows[0].count;
 }
+import db from '../db.js';
+
 // Dashboard analytics SQL queries
 // Each function returns a Promise with query result
-import db from '../db.js';
 
 export async function getMonthlyBorrow() {
   // รวม borrow_count และ return_count ต่อเดือน
@@ -281,4 +282,138 @@ export async function getBranchBorrowSummary() {
     ORDER BY borrow_count DESC
   `);
   return rows;
+}
+
+export async function getOverdueAndNearDueItems() {
+  const [rows] = await db.query(`
+    SELECT 
+      bt.borrow_id,
+      bt.borrow_code,
+      u.fullname,
+      b.branch_name,
+      p.position_name,
+      u.avatar,
+      e.name as equipment_name,
+      e.item_code,
+      e.pic,
+      bi.quantity,
+      bt.borrow_date,
+      bt.return_date as due_date,
+      bt.status,
+      DATEDIFF(bt.return_date, CURDATE()) as days_until_due,
+      CASE 
+        WHEN CURDATE() > bt.return_date THEN 'overdue'
+        WHEN DATEDIFF(bt.return_date, CURDATE()) <= 3 THEN 'near_due'
+        ELSE 'normal'
+      END as urgency_status
+    FROM borrow_transactions bt
+    JOIN users u ON bt.user_id = u.user_id
+    JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
+    JOIN equipment e ON bi.item_id = e.item_id
+    LEFT JOIN branches b ON u.branch_id = b.branch_id
+    LEFT JOIN positions p ON u.position_id = p.position_id
+    WHERE bt.status IN ('approved', 'carry')
+    AND (
+      CURDATE() > bt.return_date 
+      OR DATEDIFF(bt.return_date, CURDATE()) <= 3
+    )
+    ORDER BY 
+      CASE 
+        WHEN CURDATE() > bt.return_date THEN 1
+        ELSE 2
+      END,
+      bt.return_date ASC
+  `);
+  
+  // Group by borrow_id
+  const grouped = {};
+  rows.forEach(row => {
+    if (!grouped[row.borrow_id]) {
+      grouped[row.borrow_id] = {
+        borrow_id: row.borrow_id,
+        borrow_code: row.borrow_code,
+        borrower: {
+          name: row.fullname,
+          position: row.position_name,
+          department: row.branch_name,
+          avatar: row.avatar
+        },
+        equipment: [],
+        borrow_date: row.borrow_date ? (row.borrow_date.toISOString ? row.borrow_date.toISOString().split('T')[0] : String(row.borrow_date).split('T')[0]) : null,
+        due_date: row.due_date ? (row.due_date.toISOString ? row.due_date.toISOString().split('T')[0] : String(row.due_date).split('T')[0]) : null,
+        status: row.status,
+        days_until_due: row.days_until_due,
+        urgency_status: row.urgency_status
+      };
+    }
+    grouped[row.borrow_id].equipment.push({
+      item_code: row.item_code,
+      name: row.equipment_name,
+      quantity: row.quantity,
+      pic: row.pic
+    });
+  });
+  
+  return Object.values(grouped);
+}
+
+export async function getPendingPaymentItems() {
+  const [rows] = await db.query(`
+    SELECT 
+      bt.borrow_id,
+      bt.borrow_code,
+      u.fullname,
+      b.branch_name,
+      p.position_name,
+      u.avatar,
+      e.name as equipment_name,
+      e.item_code,
+      e.pic,
+      bi.quantity,
+      bt.borrow_date,
+      bt.return_date as due_date,
+      bt.status,
+      r.fine_amount,
+      r.return_date as actual_return_date
+    FROM borrow_transactions bt
+    JOIN users u ON bt.user_id = u.user_id
+    JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
+    JOIN equipment e ON bi.item_id = e.item_id
+    LEFT JOIN branches b ON u.branch_id = b.branch_id
+    LEFT JOIN positions p ON u.position_id = p.position_id
+    LEFT JOIN returns r ON bt.borrow_id = r.borrow_id
+    WHERE bt.status = 'waiting_payment'
+    ORDER BY r.return_date DESC
+  `);
+  
+  // Group by borrow_id
+  const grouped = {};
+  rows.forEach(row => {
+    if (!grouped[row.borrow_id]) {
+      grouped[row.borrow_id] = {
+        borrow_id: row.borrow_id,
+        borrow_code: row.borrow_code,
+        borrower: {
+          name: row.fullname,
+          position: row.position_name,
+          department: row.branch_name,
+          avatar: row.avatar
+        },
+        equipment: [],
+        borrow_date: row.borrow_date ? (row.borrow_date.toISOString ? row.borrow_date.toISOString().split('T')[0] : String(row.borrow_date).split('T')[0]) : null,
+        due_date: row.due_date ? (row.due_date.toISOString ? row.due_date.toISOString().split('T')[0] : String(row.due_date).split('T')[0]) : null,
+        actual_return_date: row.actual_return_date ? (row.actual_return_date.toISOString ? row.actual_return_date.toISOString().split('T')[0] : String(row.actual_return_date).split('T')[0]) : null,
+        status: row.status,
+        fine_amount: row.fine_amount || 0
+      };
+    }
+    grouped[row.borrow_id].equipment.push({
+      item_code: row.item_code,
+      name: row.equipment_name,
+      quantity: row.quantity,
+      pic: row.pic
+    });
+  });
+  
+  return Object.values(grouped);
 }
