@@ -20,5 +20,7 @@ router.get('/repair-vs-borrow-ratio', dashboardController.getRepairVsBorrowRatio
 router.get('/top-fine-categories', dashboardController.getTopFineCategories);
 router.get('/frequent-damage-users', dashboardController.getFrequentDamageUsers);
 router.get('/branch-borrow-summary', dashboardController.getBranchBorrowSummary);
+router.get('/overdue-near-due-items', dashboardController.getOverdueAndNearDueItems);
+router.get('/pending-payment-items', dashboardController.getPendingPaymentItems);
 
 export default router;

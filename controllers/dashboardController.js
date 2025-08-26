@@ -236,6 +236,30 @@ const dashboardController = {
       console.error('[getBranchBorrowSummary] error:', err);
       res.status(500).json({ error: err.message });
     }
+  },
+
+  // 18. Overdue and near due items
+  async getOverdueAndNearDueItems(req, res) {
+    try {
+      const result = await dashboardModel.getOverdueAndNearDueItems();
+      console.log('[getOverdueAndNearDueItems] result:', result);
+      res.json(result);
+    } catch (err) {
+      console.error('[getOverdueAndNearDueItems] error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  // 19. Pending payment items
+  async getPendingPaymentItems(req, res) {
+    try {
+      const result = await dashboardModel.getPendingPaymentItems();
+      console.log('[getPendingPaymentItems] result:', result);
+      res.json(result);
+    } catch (err) {
+      console.error('[getPendingPaymentItems] error:', err);
+      res.status(500).json({ error: err.message });
+    }
   }
 };
 
