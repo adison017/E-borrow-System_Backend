@@ -135,7 +135,7 @@ const createCloudinaryStorageWithCustomName = (folder, allowedFormats = ['jpg', 
         // สร้างชื่อไฟล์โดยเพิ่มนามสกุลไฟล์ด้วย
         const customFilename = `${borrowCode}_${slug}_${uniqueSuffix}${extension}`;
         console.log(`📝 สร้างชื่อไฟล์ Cloudinary: ${customFilename} (จาก: ${file.originalname})`);
-        
+
         return customFilename;
       };
     }
@@ -504,7 +504,7 @@ export const cloudinaryUtils = {
       // ตรวจสอบนามสกุลไฟล์เพื่อกำหนด resource_type
       const fileExtension = path.extname(filePath).toLowerCase();
       const isDocument = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'html', 'rtf', 'xml', 'json'].includes(fileExtension.substring(1));
-      
+
       const uploadOptions = {
         folder: folder,
         resource_type: isDocument ? 'auto' : 'auto',
@@ -765,7 +765,7 @@ export const handleCloudinaryUpload = (uploadMiddleware) => {
               'Microsoft Excel (.xls, .xlsx)',
               'Text files (.txt, .csv, .html)',
               'Images (.jpg, .jpeg, .png, .gif, .webp)',
-              
+
               'Other (.rtf, .xml, .json)'
             ]
           });

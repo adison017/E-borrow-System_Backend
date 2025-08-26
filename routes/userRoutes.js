@@ -195,6 +195,8 @@ router.get('/roles', async (req, res) => {
 // Protect sensitive user routes
 router.get('/', authMiddleware, userController.getAllUsers);
 router.get('/username/:username', userController.getUserByUsername);
+router.get('/email/:email', userController.getUserByEmail);
+router.get('/phone/:phone', userController.getUserByPhone);
 router.get('/id/:id', userController.getUserById);
 router.post('/', userController.createUser);
 router.put('/id/:id', authMiddleware, userController.updateUser);
