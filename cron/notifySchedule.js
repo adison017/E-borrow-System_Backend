@@ -191,66 +191,7 @@ cron.schedule('29 0 * * *', async () => {
   }
 }, { timezone: 'Asia/Bangkok' });
 
-// เพิ่ม Location Tracking Cron Job
-const startLocationTrackingCron = () => {
-  console.log('Starting Location Tracking Cron Job...');
-  
-  // ตรวจสอบและอัพเดทตำแหน่งทุก 1 นาที
-  cron.schedule('*/1 * * * *', async () => {
-    try {
-      console.log('Location Tracking Cron: Checking for active borrows...');
-      
-      // ดึงรายการยืมที่ active และมีข้อมูลตำแหน่ง
-      const [activeBorrows] = await db.execute(`
-        SELECT 
-          bt.borrow_id,
-          bt.user_id,
-          bt.status,
-          bt.borrower_location,
-          bt.last_location_update,
-          u.username,
-          u.email
-        FROM borrow_transactions bt
-        JOIN users u ON bt.user_id = u.user_id
-        WHERE bt.status IN ('approved', 'carry')
-        AND bt.borrower_location IS NOT NULL
-        AND bt.last_location_update IS NOT NULL
-      `);
-      
-      console.log(`Location Tracking Cron: Found ${activeBorrows.length} active borrows`);
-      
-      // ตรวจสอบแต่ละรายการ
-      for (const borrow of activeBorrows) {
-        const lastUpdate = new Date(borrow.last_location_update);
-        const now = new Date();
-        const timeDiff = now.getTime() - lastUpdate.getTime();
-        const minutesDiff = Math.floor(timeDiff / (1000 * 60));
-        
-        // ถ้าผ่านไปมากกว่า 1 นาที ให้อัพเดทสถานะ
-        if (minutesDiff > 1) {
-          console.log(`Location Tracking Cron: Borrow ${borrow.borrow_id} last update was ${minutesDiff} minutes ago`);
-          
-          // อัพเดทสถานะเป็น carry ถ้าผ่านไปนานเกินไป (แทน overdue)
-          if (minutesDiff > 30) { // 30 นาที
-            await db.execute(`
-              UPDATE borrow_transactions 
-              SET status = 'carry', 
-                  last_location_update = NOW()
-              WHERE borrow_id = ?
-            `, [borrow.borrow_id]);
-            
-            console.log(`Location Tracking Cron: Updated borrow ${borrow.borrow_id} status to carry`);
-          }
-        }
-      }
-      
-    } catch (error) {
-      console.error('Location Tracking Cron Error:', error);
-    }
-  });
-  
-  console.log('Location Tracking Cron Job started successfully');
-};
+// Location Tracking Cron Job ถูกลบออกแล้ว เพื่อป้องกันการเปลี่ยนสถานะเป็น 'carry' โดยไม่ตั้งใจ
 
 // เพิ่ม Notification Cron Job function
 const startNotificationCron = () => {
@@ -260,7 +201,6 @@ const startNotificationCron = () => {
 };
 
 // เริ่มต้น cron jobs
-startLocationTrackingCron();
 startNotificationCron();
 
-export { startNotificationCron, startLocationTrackingCron };
+export { startNotificationCron };

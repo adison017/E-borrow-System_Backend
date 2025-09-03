@@ -16,7 +16,7 @@ import rateLimit from 'express-rate-limit';
 
 // Import cron job
 import './cron/notifySchedule.js';
-import { startNotificationCron, startLocationTrackingCron } from './cron/notifySchedule.js';
+import { startNotificationCron } from './cron/notifySchedule.js';
 
 // Import models
 import * as BorrowModel from './models/borrowModel.js';
@@ -634,7 +634,6 @@ app.use((req, res, next) => {
 
 // เริ่มต้น cron jobs
 startNotificationCron();
-startLocationTrackingCron(); // เพิ่มการเริ่มต้น location tracking cron
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
