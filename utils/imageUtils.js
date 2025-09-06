@@ -142,10 +142,10 @@ export const getPicUrl = (pic) => {
 
   // Check if it's a repair image
   if (cleanPic.includes('repair/')) {
-    return `http://localhost:5000/${cleanPic}`;
+    return `http://localhost:65033/${cleanPic}`;
   }
 
-  return `http://localhost:5000/uploads/${cleanPic}`;
+  return `http://localhost:65033/uploads/${cleanPic}`;
 };
 
 // Function to process multiple repair images
@@ -156,7 +156,7 @@ export const processRepairImages = (files, repairCode) => {
     filename: file.filename,
     original_name: file.originalname,
     file_path: `uploads/repair/${file.filename}`,
-    url: `http://localhost:5000/uploads/repair/${file.filename}`,
+    url: `http://localhost:65033/uploads/repair/${file.filename}`,
     repair_code: repairCode,
     index: index
   }));
