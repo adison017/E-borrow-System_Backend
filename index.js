@@ -70,8 +70,8 @@ server = http.createServer(app);
 
 // Centralized CORS configuration
 const defaultDevOrigins = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'http://localhost:5033',
+  'http://127.0.0.1:5033',
   'https://e-borrow-system.vercel.app', // Production frontend URL
   'https://eborrow-system.vercel.app'   // Alternative frontend URL (without dash)
 ];
@@ -371,12 +371,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate Limiting for Login Endpoints
+// Rate Limiting for Login Endpoints - ใช้ username + IP เพื่อป้องกันการบล็อก IP ร่วม
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+  windowMs: 2 * 60 * 1000, // 2 minutes
+  max: 5, // เพิ่มให้มากขึ้นเพราะแยกตาม user แล้ว
+  keyGenerator: (req) => {
+    // ใช้ username + IP เป็น key เพื่อแยกการนับตาม user
+    const username = req.body?.username || 'anonymous';
+    const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || 'unknown';
+    return `${username}:${ip}`;
+  },
   message: {
-    message: 'Too many login attempts, please try again after 15 minutes'
+    message: 'Too many login attempts for this account, please try again after 2 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -386,6 +392,20 @@ const loginLimiter = rateLimit({
 app.use('/api/users/login', loginLimiter);
 app.use('/api/users/verify-otp', loginLimiter);
 app.use('/api/users/request-otp', loginLimiter);
+
+// เพิ่ม IP-based flooding protection (ป้องกันการโจมตีด้วย username หลายตัว)
+const ipFloodingLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 20, // สูงสุด 20 requests ต่อ IP ใน 5 นาที
+  keyGenerator: (req) => req.ip,
+  message: {
+    message: 'Too many requests from this IP address, please try again later'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/users/login', ipFloodingLimiter);
 
 // General rate limiting for all routes (dev ผ่อนคลายมากขึ้น)
 const generalLimiter = rateLimit({
@@ -618,7 +638,7 @@ app.use((err, req, res, next) => {
 });
 
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 65033;
 
 // Get server URL for logging
 const getServerUrl = () => {
