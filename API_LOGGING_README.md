@@ -12,16 +12,16 @@
 🚀 ========================================
 🚀 E-Borrow System Backend Started
 🚀 ========================================
-🌐 Server URL: http://localhost:5000
+🌐 Server URL: http://localhost:65033
 🔧 Environment: development
 📡 Port: 5000
 🔒 SSL: Disabled (HTTP)
 ✅ CORS enabled for origins: http://localhost:5173, https://e-borrow-system.vercel.app
 🔌 Socket.IO server started
 📊 API Host Information:
-   - Frontend should use: http://localhost:5000/api
-   - Upload endpoint: http://localhost:5000/uploads
-   - WebSocket endpoint: http://localhost:5000
+   - Frontend should use: http://localhost:65033/api
+   - Upload endpoint: http://localhost:65033/uploads
+   - WebSocket endpoint: http://localhost:65033
 🚀 ========================================
 ```
 
@@ -50,15 +50,15 @@
 {
   "message": "E-borrow API running",
   "server": {
-    "url": "http://localhost:5000",
+    "url": "http://localhost:65033",
     "environment": "development",
     "port": 5000,
     "ssl": "disabled"
   },
   "api": {
-    "base_url": "http://localhost:5000/api",
-    "upload_url": "http://localhost:5000/uploads",
-    "websocket_url": "http://localhost:5000"
+    "base_url": "http://localhost:65033/api",
+    "upload_url": "http://localhost:65033/uploads",
+    "websocket_url": "http://localhost:65033"
   },
   "cors": {
     "allowed_origins": ["http://localhost:5173", "https://e-borrow-system.vercel.app"],
@@ -72,10 +72,10 @@
 
 ```json
 {
-  "server_url": "http://localhost:5000",
-  "api_base_url": "http://localhost:5000/api",
-  "upload_url": "http://localhost:5000/uploads",
-  "websocket_url": "http://localhost:5000",
+  "server_url": "http://localhost:65033",
+  "api_base_url": "http://localhost:65033/api",
+  "upload_url": "http://localhost:65033/uploads",
+  "websocket_url": "http://localhost:65033",
   "environment": "development",
   "client_origin": "http://localhost:5173",
   "timestamp": "2024-01-15T10:30:45.123Z"

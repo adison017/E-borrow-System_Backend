@@ -147,7 +147,7 @@ export const parseRepairImages = (pic_filename) => {
         filename: image.filename || image,
         original_name: image.original_name || image,
         file_path: image.file_path || `uploads/repair/${image.filename || image}`,
-        url: image.url || `http://localhost:5000/uploads/repair/${image.filename || image}`,
+        url: image.url || `http://localhost:65033/uploads/repair/${image.filename || image}`,
         repair_code: image.repair_code,
         index: image.index || index
       }));
@@ -158,7 +158,7 @@ export const parseRepairImages = (pic_filename) => {
       filename: pic_filename,
       original_name: pic_filename,
       file_path: `uploads/repair/${pic_filename}`,
-      url: `http://localhost:5000/uploads/repair/${pic_filename}`,
+      url: `http://localhost:65033/uploads/repair/${pic_filename}`,
       repair_code: null,
       index: 0
     }];

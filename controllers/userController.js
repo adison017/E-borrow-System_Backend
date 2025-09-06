@@ -66,12 +66,14 @@ function checkLoginAttempts(username, ip) {
   // ตรวจสอบว่าถูกบล็อกหรือไม่
   if (attempts.blockedUntil > Date.now()) {
     const remainingTime = Math.ceil((attempts.blockedUntil - Date.now()) / 1000 / 60);
+    console.log(`⚠️  Login blocked for user: ${username} from IP: ${ip}, ${remainingTime} minutes remaining`);
     throw new Error(`บัญชีถูกบล็อกชั่วคราว กรุณาลองใหม่ใน ${remainingTime} นาที`);
   }
 
-  // รีเซ็ตถ้าผ่านไป 15 นาทีแล้ว
-  if (Date.now() - attempts.lastAttempt > 15 * 60 * 1000) {
+  // รีเซ็ตถ้าผ่านไป 2 นาทีแล้ว
+  if (Date.now() - attempts.lastAttempt > 2 * 60 * 1000) {
     attempts.count = 0;
+    console.log(`✨ Login attempts reset for user: ${username} from IP: ${ip}`);
   }
 
   return attempts;
@@ -85,14 +87,18 @@ function updateLoginAttempts(username, ip, success = false) {
   if (success) {
     // รีเซ็ตเมื่อ login สำเร็จ
     loginAttempts.delete(key);
+    console.log(`✅ Login successful for user: ${username} from IP: ${ip}`);
   } else {
     // เพิ่มจำนวนครั้งที่ผิด
     attempts.count += 1;
     attempts.lastAttempt = Date.now();
+    
+    console.log(`❌ Login failed for user: ${username} from IP: ${ip}, attempt ${attempts.count}/3`);
 
-    // บล็อกถ้าผิด 5 ครั้ง
-    if (attempts.count >= 5) {
-      attempts.blockedUntil = Date.now() + (15 * 60 * 1000); // บล็อก 15 นาที
+    // บล็อกถ้าผิด 3 ครั้ง
+    if (attempts.count >= 3) {
+      attempts.blockedUntil = Date.now() + (2 * 60 * 1000); // บล็อก 2 นาที
+      console.log(`Ὢb User ${username} from IP ${ip} has been blocked for 2 minutes after 3 failed attempts`);
     }
 
     loginAttempts.set(key, attempts);
@@ -1832,7 +1838,7 @@ const userController = {
         console.log('Uploaded filename:', filename); // Debug log
 
         // สร้าง URL สำหรับรูปภาพ
-        const imageUrl = `http://localhost:5000/uploads/${filename}`;
+        const imageUrl = `http://localhost:65033/uploads/${filename}`;
 
         // ส่งข้อมูลกลับไป
         res.json({
@@ -1858,7 +1864,7 @@ const userController = {
       // Return empty array instead of 404 if no results found
       const mapped = results.map(user => ({
         ...user,
-        avatar: user.avatar ? `http://localhost:5000/uploads/${user.avatar}` : null
+        avatar: user.avatar ? `http://localhost:65033/uploads/${user.avatar}` : null
       }));
 
       res.json(mapped);
