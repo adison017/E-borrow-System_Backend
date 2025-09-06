@@ -337,7 +337,26 @@ export const createBorrow = async (req, res) => {
 export const getAllBorrows = async (req, res) => {
   try {
     const rows = await BorrowModel.getAllBorrows();
-    res.json(rows);
+    
+    // Add overdue status calculation
+    const currentDate = new Date();
+    const borrowsWithOverdueStatus = rows.map(borrow => {
+      // Only calculate overdue for active borrows (approved, carry)
+      if (borrow.status === 'approved' || borrow.status === 'carry') {
+        const dueDate = new Date(borrow.due_date);
+        // Check if current date is past due date
+        if (currentDate > dueDate) {
+          return {
+            ...borrow,
+            status: 'overdue',
+            original_status: borrow.status // Keep original status for reference
+          };
+        }
+      }
+      return borrow;
+    });
+    
+    res.json(borrowsWithOverdueStatus);
   } catch (err) {
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
   }
@@ -1246,23 +1265,31 @@ export const checkLocationTrackingStatus = async (req, res) => {
       SELECT
         borrow_id,
         status,
+        return_date,
         borrower_location,
         last_location_update,
         created_at
       FROM borrow_transactions
       WHERE user_id = ?
-      AND status IN ('approved', 'carry', 'overdue')
+      AND status IN ('approved', 'carry')
       ORDER BY created_at DESC
     `, [user_id]);
 
+    // Calculate overdue status dynamically
+    const currentDate = new Date();
     const trackingStatus = activeBorrows.map(borrow => {
       const lastUpdate = borrow.last_location_update ? new Date(borrow.last_location_update) : null;
       const now = new Date();
       const minutesDiff = lastUpdate ? Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60)) : null;
+      
+      // Check if borrow is overdue
+      const dueDate = new Date(borrow.return_date);
+      const actualStatus = currentDate > dueDate ? 'overdue' : borrow.status;
 
       return {
         borrow_id: borrow.borrow_id,
-        status: borrow.status,
+        status: actualStatus,
+        original_status: borrow.status,
         has_location: !!borrow.borrower_location,
         last_update: borrow.last_location_update,
         minutes_since_update: minutesDiff,
