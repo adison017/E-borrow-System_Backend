@@ -7,6 +7,7 @@ import { broadcastBadgeCounts } from '../index.js';
 import * as RepairRequest from '../models/repairRequestModel.js';
 import * as ContactInfoModel from '../models/contactInfoModel.js';
 import { createImportantDocumentsUpload } from '../utils/cloudinaryUtils.js';
+import auditLogger from '../utils/auditLogger.js';
 import db from '../db.js';
 import path from 'path';
 import fs from 'fs';
@@ -289,6 +290,22 @@ export const createBorrow = async (req, res) => {
     }
     // ส่ง response กลับทันที
     res.status(201).json({ borrow_id, borrow_code });
+    
+    // Log the borrow creation
+    try {
+      const equipmentList = parsedItems.map(item => `item_id: ${item.item_id}, quantity: ${item.quantity || 1}`).join(', ');
+      await auditLogger.logBusiness(req, 'borrow', `สร้างคำขอยืมใหม่: ${borrow_code}`, {
+        borrow_id,
+        borrow_code,
+        user_id,
+        equipment_items: equipmentList,
+        borrow_date,
+        return_date,
+        purpose
+      }, null, 'borrows', borrow_id);
+    } catch (logError) {
+      console.error('Failed to log borrow creation:', logError);
+    }
 
     // อัปเดต badge counts แบบ async (ไม่ต้องรอ)
     setImmediate(async () => {
@@ -454,6 +471,35 @@ export const updateBorrowStatus = async (req, res) => {
         rejection_reason: rejection_reason
       }
     });
+    
+    // Log the status change
+    try {
+      let actionType = 'update';
+      let description = `อัปเดตสถานะการยืมเป็น: ${status}`;
+      
+      if (status === 'pending_approval') {
+        actionType = 'approve';
+        description = `อนุมัติคำขอยืม: ${borrow.borrow_code} ส่งตรวจสอบ`;
+      } else if (status === 'carry') {
+        actionType = 'approve';
+        description = `อนุมัติและส่งมอบครุภัณฑ์: ${borrow.borrow_code}`;
+      } else if (status === 'rejected') {
+        actionType = 'reject';
+        description = `ปฏิเสธคำขอยืม: ${borrow.borrow_code}${rejection_reason ? ' - เหตุผล: ' + rejection_reason : ''}`;
+      }
+      
+      await auditLogger.logBusiness(req, actionType, description, {
+        borrow_id: id,
+        borrow_code: borrow.borrow_code,
+        old_status: borrow.status,
+        new_status: status,
+        rejection_reason: rejection_reason || null,
+        has_signature: !!signaturePath,
+        has_handover_photo: !!handoverPhotoPath
+      }, { status: borrow.status }, 'borrows', id);
+    } catch (logError) {
+      console.error('Failed to log status change:', logError);
+    }
 
     // อัปเดต badge counts หลังจากส่ง response
     try {
@@ -1155,6 +1201,21 @@ export const updateBorrowerLocation = async (req, res) => {
     console.log('Location update completed successfully!');
     console.log('Updated location data:', locationData);
     console.log('Thai time:', thaiTimeString);
+
+    // Log location update
+    try {
+      await auditLogger.logBusiness(req, 'update', 
+        `อัปเดตตำแหน่งผู้ยืม: ${borrow.borrow_code}`, {
+          borrow_id: id,
+          borrow_code: borrow.borrow_code,
+          location: locationData,
+          timestamp: thaiTimeString
+        }, 
+        { old_location: borrow.borrower_location }, 
+        'borrow_transactions', id);
+    } catch (logError) {
+      console.error('Failed to log location update:', logError);
+    }
 
     res.json({
       success: true,

@@ -11,6 +11,7 @@ import User from '../models/userModel.js';
 import db from '../db.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { uploadUserAvatar } from '../utils/cloudinaryUploadUtils.js';
+import auditLogger from '../utils/auditLogger.js';
 
 const router = express.Router();
 // ส่ง OTP ไปอีเมล (สมัครสมาชิก)
@@ -118,6 +119,21 @@ router.post('/upload-image', authMiddleware, async (req, res, next) => {
             saved = !!updateRes && updateRes.affectedRows > 0;
           } catch (saveErr) {
             console.error('Failed to save avatar URL to DB:', saveErr);
+          }
+
+          // Log avatar upload
+          try {
+            await auditLogger.logFile(req, 'upload', req.file.originalname, {
+              file_size: req.file.size,
+              file_type: req.file.mimetype,
+              cloudinary_url: result.url,
+              cloudinary_public_id: result.public_id,
+              user_code: user_code,
+              upload_type: 'user_avatar',
+              saved_to_db: saved
+            });
+          } catch (logError) {
+            console.error('Failed to log avatar upload:', logError);
           }
 
           res.json({
