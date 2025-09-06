@@ -19,7 +19,7 @@ export const createBorrow = async (req, res) => {
   console.log('Content-Type:', req.headers['content-type']);
   console.log('req.body keys:', Object.keys(req.body));
   const { user_id, borrow_date, return_date, items, purpose, borrow_code: existingBorrowCode } = req.body;
-  
+
   // Debug: ตรวจสอบข้อมูลที่ได้รับ
   console.log('Debug - Received data:');
   console.log('user_id:', user_id, 'type:', typeof user_id);
@@ -34,7 +34,7 @@ export const createBorrow = async (req, res) => {
   console.log('Debug - Items parsing:');
   console.log('items type:', typeof items);
   console.log('items value:', items);
-  
+
   if (typeof items === 'string') {
     try {
       parsedItems = JSON.parse(items);
@@ -59,12 +59,12 @@ export const createBorrow = async (req, res) => {
   console.log('purpose exists:', !!purpose);
   console.log('parsedItems is array:', Array.isArray(parsedItems));
   console.log('parsedItems length:', parsedItems ? parsedItems.length : 'N/A');
-  
+
   if (!user_id || !borrow_date || !return_date || !purpose || !Array.isArray(parsedItems) || parsedItems.length === 0) {
     console.log('Debug - Validation failed');
     return res.status(400).json({ message: 'ข้อมูลไม่ครบถ้วน กรุณากรอกข้อมูลให้ครบถ้วน' });
   }
-  
+
   console.log('Debug - Validation passed');
   // ตรวจสอบ item_id ใน items ว่าต้องไม่เป็น null หรือ undefined
   const invalidItem = parsedItems.find(item => !item.item_id);
@@ -440,6 +440,39 @@ export const updateBorrowStatus = async (req, res) => {
       });
     } catch (verifyError) {
       console.log('Error during verification:', verifyError);
+    }
+
+    // ส่ง response กลับไปยัง frontend
+    res.json({
+      success: true,
+      message: 'อัปเดตสถานะสำเร็จ',
+      data: {
+        borrow_id: id,
+        status: status,
+        signature_image: signaturePath,
+        handover_photo: handoverPhotoPath,
+        rejection_reason: rejection_reason
+      }
+    });
+
+    // อัปเดต badge counts หลังจากส่ง response
+    try {
+      const [pending, carry, pendingApproval] = await Promise.all([
+        BorrowModel.getBorrowsByStatus(['pending']),
+        BorrowModel.getBorrowsByStatus(['carry']),
+        BorrowModel.getBorrowsByStatus(['pending_approval'])
+      ]);
+      const allRepairs = await RepairRequest.getAllRepairRequests();
+      const repairApprovalCount = allRepairs.length;
+      broadcastBadgeCounts({
+        pendingCount: pending.length + pendingApproval.length,
+        carryCount: carry.length,
+        borrowApprovalCount: pendingApproval.length,
+        repairApprovalCount
+      });
+      console.log('Badge counts updated after status change');
+    } catch (err) {
+      console.error('Error updating badge counts:', err);
     }
 
     // ถ้าปฏิเสธ ให้อัปเดตสถานะครุภัณฑ์เป็น 'พร้อมใช้งาน'
@@ -1048,7 +1081,7 @@ export const updateBorrowStatus = async (req, res) => {
       repairApprovalCount
     });
 
-    res.json({ affectedRows, signaturePath, handoverPhotoPath });
+    // Response already sent above, no need to send again
   } catch (err) {
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
   }
@@ -1111,7 +1144,7 @@ export const updateBorrowerLocation = async (req, res) => {
 
     // อัปเดตตำแหน่งในฐานข้อมูลพร้อมเวลาไทย
     const result = await BorrowModel.updateBorrowerLocationWithThaiTime(id, locationData, thaiTimeString);
-    
+
     if (result.affectedRows === 0) {
       return res.status(400).json({
         message: 'ไม่สามารถอัปเดตตำแหน่งได้',
@@ -1146,26 +1179,26 @@ export const updateBorrowerLocation = async (req, res) => {
 export const checkLocationTrackingStatus = async (req, res) => {
   try {
     const { user_id } = req.params;
-    
+
     // ดึงรายการยืมที่ active ของ user
     const [activeBorrows] = await db.execute(`
-      SELECT 
+      SELECT
         borrow_id,
         status,
         borrower_location,
         last_location_update,
         created_at
-      FROM borrow_transactions 
-      WHERE user_id = ? 
+      FROM borrow_transactions
+      WHERE user_id = ?
       AND status IN ('approved', 'carry', 'overdue')
       ORDER BY created_at DESC
     `, [user_id]);
-    
+
     const trackingStatus = activeBorrows.map(borrow => {
       const lastUpdate = borrow.last_location_update ? new Date(borrow.last_location_update) : null;
       const now = new Date();
       const minutesDiff = lastUpdate ? Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60)) : null;
-      
+
       return {
         borrow_id: borrow.borrow_id,
         status: borrow.status,
@@ -1175,7 +1208,7 @@ export const checkLocationTrackingStatus = async (req, res) => {
         is_tracking_active: minutesDiff !== null && minutesDiff <= 5 // ถ้าอัพเดทภายใน 5 นาทีถือว่าติดตามอยู่
       };
     });
-    
+
     res.json({
       success: true,
       data: {
@@ -1185,7 +1218,7 @@ export const checkLocationTrackingStatus = async (req, res) => {
         is_tracking: activeBorrows.length > 0 && trackingStatus.some(b => b.is_tracking_active)
       }
     });
-    
+
   } catch (error) {
     console.error('Error checking location tracking status:', error);
     res.status(500).json({

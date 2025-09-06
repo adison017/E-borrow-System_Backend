@@ -1138,6 +1138,34 @@ const userController = {
     }
   },
 
+  getUserByEmail: async (req, res) => {
+    try {
+      const email = req.params.email;
+      const user = await User.findByEmail(email);
+      res.json(user);
+    } catch (err) {
+      console.error('Error fetching user by email:', err);
+      res.status(500).json({
+        message: 'An error occurred while fetching user',
+        error: err.message
+      });
+    }
+  },
+
+  getUserByPhone: async (req, res) => {
+    try {
+      const phone = req.params.phone;
+      const user = await User.findByPhone(phone);
+      res.json(user);
+    } catch (err) {
+      console.error('Error fetching user by phone:', err);
+      res.status(500).json({
+        message: 'An error occurred while fetching user',
+        error: err.message
+      });
+    }
+  },
+
   getUserById: async (req, res) => {
     try {
       const userId = req.params.id;
@@ -1497,6 +1525,15 @@ const userController = {
         });
       }
 
+      // ตรวจสอบเบอร์โทรศัพท์ซ้ำ
+      const existPhone = await User.findByPhone(userData.phone);
+      if (existPhone) {
+        return res.status(400).json({
+          message: 'เบอร์โทรศัพท์นี้ถูกใช้ไปแล้ว กรุณาใช้เบอร์อื่น',
+          field: 'phone'
+        });
+      }
+
       // Create the user
       const createdUser = await User.create(userData);
 
@@ -1516,12 +1553,24 @@ const userController = {
     } catch (error) {
       console.error('Error creating user:', error);
 
-      // Handle duplicate email error
-      if (error.code === 'ER_DUP_ENTRY' && error.sqlMessage.includes('email')) {
-        return res.status(400).json({
-          message: 'อีเมลนี้ถูกใช้งานแล้ว',
-          error: 'Email already exists'
-        });
+      // Handle duplicate entry errors
+      if (error.code === 'ER_DUP_ENTRY') {
+        if (error.sqlMessage.includes('email')) {
+          return res.status(400).json({
+            message: 'อีเมลนี้ถูกใช้งานแล้ว',
+            error: 'Email already exists'
+          });
+        } else if (error.sqlMessage.includes('user_code')) {
+          return res.status(400).json({
+            message: 'รหัสนิสิต/บุคลากรนี้ถูกใช้งานแล้ว',
+            error: 'User code already exists'
+          });
+        } else if (error.sqlMessage.includes('phone')) {
+          return res.status(400).json({
+            message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว',
+            error: 'Phone number already exists'
+          });
+        }
       }
 
       // Handle other errors
@@ -1560,6 +1609,37 @@ const userController = {
           message: 'No data provided for update',
           error: 'Request body is empty'
         });
+      }
+
+      // ตรวจสอบข้อมูลซ้ำ (email, user_code, phone) เฉพาะเมื่อมีการเปลี่ยนแปลง
+      if (req.body.email) {
+        const existEmail = await User.findByEmail(req.body.email);
+        if (existEmail && existEmail.user_id !== userId) {
+          return res.status(400).json({
+            message: 'อีเมลนี้ถูกใช้ไปแล้ว กรุณาใช้อีเมลอื่น',
+            field: 'email'
+          });
+        }
+      }
+
+      if (req.body.user_code) {
+        const existUserCode = await User.findByUserCode(req.body.user_code);
+        if (existUserCode && existUserCode.user_id !== userId) {
+          return res.status(400).json({
+            message: 'รหัสนิสิต/บุคลากรนี้ถูกใช้ไปแล้ว กรุณาใช้รหัสอื่น',
+            field: 'user_code'
+          });
+        }
+      }
+
+      if (req.body.phone) {
+        const existPhone = await User.findByPhone(req.body.phone);
+        if (existPhone && existPhone.user_id !== userId) {
+          return res.status(400).json({
+            message: 'เบอร์โทรศัพท์นี้ถูกใช้ไปแล้ว กรุณาใช้เบอร์อื่น',
+            field: 'phone'
+          });
+        }
       }
 
       // ตรวจสอบ OTP เฉพาะกรณีเปลี่ยนรหัสผ่าน
@@ -1630,6 +1710,27 @@ const userController = {
 
     } catch (error) {
       console.error('Error in updateUser:', error);
+
+      // Handle duplicate entry errors
+      if (error.code === 'ER_DUP_ENTRY') {
+        if (error.sqlMessage.includes('email')) {
+          return res.status(400).json({
+            message: 'อีเมลนี้ถูกใช้งานแล้ว',
+            error: 'Email already exists'
+          });
+        } else if (error.sqlMessage.includes('user_code')) {
+          return res.status(400).json({
+            message: 'รหัสนิสิต/บุคลากรนี้ถูกใช้งานแล้ว',
+            error: 'User code already exists'
+          });
+        } else if (error.sqlMessage.includes('phone')) {
+          return res.status(400).json({
+            message: 'เบอร์โทรศัพท์นี้ถูกใช้งานแล้ว',
+            error: 'Phone number already exists'
+          });
+        }
+      }
+
       res.status(500).json({
         message: 'Error updating user',
         error: error.message || 'Unknown error occurred'

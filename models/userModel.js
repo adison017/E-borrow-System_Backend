@@ -197,6 +197,45 @@ const User = {
     }
   },
 
+  findByPhone: async (phone) => {
+    try {
+      const [results] = await db.query(`
+        SELECT
+          u.user_id,
+          u.user_code,
+          u.username,
+          u.password,
+          u.Fullname,
+          u.email,
+          u.phone,
+          u.avatar,
+          u.street,
+          u.parish,
+          u.district,
+          u.province,
+          u.postal_no,
+          u.role_id,
+          u.line_notify_enabled,
+          r.role_name,
+          p.position_name,
+          b.branch_name,
+          u.position_id,
+          u.branch_id,
+          u.created_at,
+          u.updated_at
+        FROM users u
+        LEFT JOIN roles r ON u.role_id = r.role_id
+        LEFT JOIN positions p ON u.position_id = p.position_id
+        LEFT JOIN branches b ON u.branch_id = b.branch_id
+        WHERE u.phone = ?
+      `, [phone]);
+      return results[0];
+    } catch (error) {
+      console.error('Error in findByPhone:', error);
+      throw error;
+    }
+  },
+
   create: async (userData) => {
     try {
       if (!userData || typeof userData !== 'object') {
