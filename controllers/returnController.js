@@ -13,6 +13,7 @@ import User from '../models/userModel.js';
 import { sendLineNotify } from '../utils/lineNotify.js';
 import { broadcastBadgeCounts } from '../index.js';
 import * as RepairRequest from '../models/repairRequestModel.js';
+import auditLogger from '../utils/auditLogger.js';
 
 // Helper function for strict check
 function isLineNotifyEnabled(val) {
@@ -374,6 +375,26 @@ export const createReturn = async (req, res) => {
       }
     }
 
+    // Log return creation
+    try {
+      const borrow = await BorrowModel.getBorrowById(borrow_id);
+      await auditLogger.logBusiness(req, 'return', 
+        `บันทึกการคืนครุภัณฑ์: ${borrow.borrow_code}`, {
+          borrow_id,
+          borrow_code: borrow.borrow_code,
+          return_id,
+          return_date,
+          fine_amount,
+          damage_fine,
+          late_fine,
+          late_days,
+          status: newStatus,
+          payment_method: paymentMethod
+        }, null, 'returns', return_id);
+    } catch (logError) {
+      console.error('Failed to log return creation:', logError);
+    }
+
     res.status(201).json({ return_id, user_id: return_by });
   } catch (err) {
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
@@ -586,6 +607,22 @@ export const updatePayStatus = async (req, res) => {
         console.log(`[LINE Notify] Not sending to user_id=${user.user_id} because line_notify_enabled=${user.line_notify_enabled}`);
       }
     }
+    
+    // Log payment status update
+    try {
+      const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+      await auditLogger.logBusiness(req, 'return', 
+        `ยืนยันการชำระเงิน: ${borrow.borrow_code}`, {
+          borrow_id: ret.borrow_id,
+          borrow_code: borrow.borrow_code,
+          return_id,
+          old_pay_status: 'pending',
+          new_pay_status: 'paid'
+        }, { pay_status: 'pending' }, 'returns', return_id);
+    } catch (logError) {
+      console.error('Failed to log payment confirmation:', logError);
+    }
+    
     res.json({ success: true });
   } catch (err) {
     console.error('[updatePayStatus] error:', err);
@@ -747,6 +784,20 @@ export const confirmPayment = async (req, res) => {
       } catch (notifyErr) {
         console.error('[confirm-payment] Error sending LINE notification:', notifyErr);
         // ไม่ throw error เพราะการส่ง notification ไม่ควรทำให้การชำระเงินล้มเหลว
+      }
+      
+      // Log online payment confirmation
+      try {
+        const borrow = await BorrowModel.getBorrowById(borrow_id);
+        await auditLogger.logBusiness(req, 'return', 
+          `ยืนยันการชำระเงินออนไลน์: ${borrow.borrow_code}`, {
+            borrow_id,
+            borrow_code: borrow.borrow_code,
+            proof_image,
+            cloudinary_public_id: cloudinary_public_id || null
+          });
+      } catch (logError) {
+        console.error('Failed to log online payment confirmation:', logError);
       }
       
       res.json({ success: true });
@@ -931,6 +982,24 @@ export const adminApproveSlip = async (req, res) => {
     } catch (e) {
       console.error('[adminApproveSlip] error updating equipment statuses:', e);
     }
+    
+    // Log admin slip approval
+    try {
+      const ret = await ReturnModel.getReturnById(return_id);
+      if (ret && ret.borrow_id) {
+        const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+        await auditLogger.logBusiness(req, 'approve', 
+          `อนุมัติสลิปการชำระเงิน: ${borrow.borrow_code}`, {
+            borrow_id: ret.borrow_id,
+            borrow_code: borrow.borrow_code,
+            return_id,
+            action: 'slip_approved'
+          });
+      }
+    } catch (logError) {
+      console.error('Failed to log slip approval:', logError);
+    }
+    
     return res.json({ success: true });
   } catch (err) {
     console.error('[adminApproveSlip] error:', err);
@@ -945,6 +1014,24 @@ export const adminRejectSlip = async (req, res) => {
     const { reason } = req.body || {};
     if (!return_id) return res.status(400).json({ success: false, message: 'Missing return_id' });
     await rejectSlipByReturnId(return_id, reason || null);
+    
+    // Log admin slip rejection
+    try {
+      const ret = await ReturnModel.getReturnById(return_id);
+      if (ret && ret.borrow_id) {
+        const borrow = await BorrowModel.getBorrowById(ret.borrow_id);
+        await auditLogger.logBusiness(req, 'reject', 
+          `ปฏิเสธสลิปการชำระเงิน: ${borrow.borrow_code}${reason ? ' - เหตุผล: ' + reason : ''}`, {
+            borrow_id: ret.borrow_id,
+            borrow_code: borrow.borrow_code,
+            return_id,
+            action: 'slip_rejected',
+            reason: reason || null
+          });
+      }
+    } catch (logError) {
+      console.error('Failed to log slip rejection:', logError);
+    }
     
     // === เพิ่มการส่ง LINE Notify เมื่อแอดมินปฏิเสธสลิป ===
     try {

@@ -4,9 +4,12 @@ export const getAllEquipment = async () => {
   try {
     console.log('getAllEquipment - Fetching all equipment...');
     const [rows] = await connection.query(`
-      SELECT e.*, c.name as category_name, c.category_code 
+      SELECT e.*, c.name as category_name, c.category_code,
+             r.room_name, r.room_code, r.address as room_address, 
+             r.detail as room_detail, r.image_url as room_image_url
       FROM equipment e 
       LEFT JOIN category c ON e.category_id = c.category_id
+      LEFT JOIN room r ON e.room_id = r.room_id
     `);
     console.log('getAllEquipment - Total equipment found:', rows.length);
     console.log('getAllEquipment - Item codes:', rows.map(item => item.item_code));
@@ -22,9 +25,12 @@ export const getEquipmentByCode = async (item_code) => {
   try {
     console.log('getEquipmentByCode - Searching for item_code:', item_code);
     const [rows] = await connection.query(`
-      SELECT e.*, c.name as category_name, c.category_code 
+      SELECT e.*, c.name as category_name, c.category_code,
+             r.room_name, r.room_code, r.address as room_address, 
+             r.detail as room_detail, r.image_url as room_image_url
       FROM equipment e 
       LEFT JOIN category c ON e.category_id = c.category_id 
+      LEFT JOIN room r ON e.room_id = r.room_id
       WHERE e.item_code = ?
     `, [item_code]);
     console.log('getEquipmentByCode - Found rows:', rows.length);
@@ -59,9 +65,12 @@ export const getEquipmentByItemId = async (item_id) => {
   try {
     console.log('getEquipmentByItemId - Searching for item_id:', item_id);
     const [rows] = await connection.query(`
-      SELECT e.*, c.name as category_name, c.category_code 
+      SELECT e.*, c.name as category_name, c.category_code,
+             r.room_name, r.room_code, r.address as room_address, 
+             r.detail as room_detail, r.image_url as room_image_url
       FROM equipment e 
       LEFT JOIN category c ON e.category_id = c.category_id 
+      LEFT JOIN room r ON e.room_id = r.room_id
       WHERE e.item_id = ?
     `, [item_id]);
     console.log('getEquipmentByItemId - Found rows:', rows.length);
@@ -151,6 +160,11 @@ export const getAllEquipmentWithDueDate = async () => {
         e.*,
         c.name as category_name,
         c.category_code,
+        r.room_name, 
+        r.room_code, 
+        r.address as room_address, 
+        r.detail as room_detail, 
+        r.image_url as room_image_url,
         (
           SELECT bt.return_date
           FROM borrow_items bi
@@ -160,6 +174,7 @@ export const getAllEquipmentWithDueDate = async () => {
         ) AS dueDate
       FROM equipment e
       LEFT JOIN category c ON e.category_id = c.category_id
+      LEFT JOIN room r ON e.room_id = r.room_id
     `);
     return rows;
   } catch (error) {

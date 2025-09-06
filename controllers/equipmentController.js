@@ -3,6 +3,7 @@ import path from 'path';
 import * as Equipment from '../models/equipmentModel.js';
 import { getPicUrl } from '../utils/imageUtils.js';
 import { saveBase64Image } from '../utils/saveBase64Image.js';
+import auditLogger from '../utils/auditLogger.js';
 
 export const getAllEquipment = async (req, res) => {
   try {
@@ -83,6 +84,25 @@ export const addEquipment = async (req, res) => {
     data.room_id = data.room_id || '';
 
     await Equipment.addEquipment(data);
+    
+    // Log equipment creation
+    try {
+      await auditLogger.logCRUD(req, 'create', 'equipment', data.item_code, 
+        `เพิ่มครุภัณฑ์ใหม่: ${data.name} (${data.item_code})`, 
+        null, // No old values for creation
+        {
+          item_code: data.item_code,
+          name: data.name,
+          category: data.category,
+          quantity: data.quantity,
+          status: data.status,
+          price: data.price,
+          room_id: data.room_id
+        });
+    } catch (logError) {
+      console.error('Failed to log equipment creation:', logError);
+    }
+    
     res.status(201).json({ message: 'เพิ่มครุภัณฑ์สำเร็จ', item_code: data.item_code });
   } catch (err) {
     console.error('Error in addEquipment:', err);
@@ -156,6 +176,33 @@ export const updateEquipment = async (req, res) => {
 
     console.log('updateEquipment - Updating equipment...');
     await Equipment.updateEquipmentByItemId(equipmentItemId, data);
+    
+    // Log equipment update
+    try {
+      await auditLogger.logCRUD(req, 'update', 'equipment', data.item_code,
+        `แก้ไขครุภัณฑ์: ${data.name} (${data.item_code})`, 
+        { 
+          item_code: results[0].item_code, 
+          name: results[0].name,
+          category: results[0].category,
+          quantity: results[0].quantity,
+          status: results[0].status,
+          price: results[0].price,
+          room_id: results[0].room_id
+        },
+        {
+          item_code: data.item_code,
+          name: data.name,
+          category: data.category,
+          quantity: data.quantity,
+          status: data.status,
+          price: data.price,
+          room_id: data.room_id
+        });
+    } catch (logError) {
+      console.error('Failed to log equipment update:', logError);
+    }
+    
     console.log('updateEquipment - Equipment updated successfully');
     res.json({ message: 'Equipment updated' });
   } catch (err) {
@@ -222,6 +269,22 @@ export const deleteEquipment = async (req, res) => {
     }
     // ลบข้อมูลใน DB
     await Equipment.deleteEquipment(req.params.item_code);
+    
+    // Log equipment deletion
+    try {
+      await auditLogger.logCRUD(req, 'delete', 'equipment', results[0].item_code,
+        `ลบครุภัณฑ์: ${results[0].name} (${results[0].item_code})`,
+        {
+          item_code: results[0].item_code,
+          name: results[0].name,
+          category: results[0].category,
+          quantity: results[0].quantity,
+          status: results[0].status
+        }, null);
+    } catch (logError) {
+      console.error('Failed to log equipment deletion:', logError);
+    }
+    
     res.json({ message: 'Equipment deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });

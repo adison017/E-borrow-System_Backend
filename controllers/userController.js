@@ -7,6 +7,7 @@ import User from '../models/userModel.js';
 import { sendMail } from '../utils/emailUtils.js';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import auditLogger from '../utils/auditLogger.js';
 
 // สำหรับเก็บ OTP ชั่วคราว (ใน production ควรใช้ redis หรือ db)
 const otpStore = new Map();
@@ -1219,12 +1220,43 @@ const userController = {
         checkLoginAttempts(username, ip);
       } catch (error) {
         updateLoginAttempts(username, ip, false); // เพิ่มครั้งที่ผิด
+        
+        // Log blocked login attempt
+        try {
+          await auditLogger.logAuth(req, 'login', {
+            description: `พยายามเข้าสู่ระบบถูกบล็อก - เกินขีดจำกัด: ${username}`,
+            data: {
+              username,
+              reason: 'rate_limited',
+              error: error.message,
+              attempt_time: new Date().toISOString()
+            }
+          });
+        } catch (logError) {
+          console.error('Failed to log blocked attempt:', logError);
+        }
+        
         return res.status(401).json({ message: error.message });
       }
 
       const user = await User.findByUsername(username);
       if (!user) {
         updateLoginAttempts(username, ip, false); // เพิ่มครั้งที่ผิด
+        
+        // Log failed login attempt - user not found
+        try {
+          await auditLogger.logAuth(req, 'login', {
+            description: `พยายามเข้าสู่ระบบล้มเหลว - ไม่พบผู้ใช้งาน: ${username}`,
+            data: {
+              username,
+              reason: 'user_not_found',
+              attempt_time: new Date().toISOString()
+            }
+          });
+        } catch (logError) {
+          console.error('Failed to log user not found attempt:', logError);
+        }
+        
         return res.status(401).json({ message: 'ไม่พบผู้ใช้งานนี้' });
       }
 
@@ -1240,6 +1272,22 @@ const userController = {
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
         updateLoginAttempts(username, ip, false); // เพิ่มครั้งที่ผิด
+        
+        // Log failed password attempt
+        try {
+          await auditLogger.logAuth(req, 'login', {
+            description: `พยายามเข้าสู่ระบบล้มเหลว - รหัสผ่านไม่ถูกต้อง: ${username}`,
+            data: {
+              username,
+              user_id: user.user_id,
+              reason: 'incorrect_password',
+              attempt_time: new Date().toISOString()
+            }
+          });
+        } catch (logError) {
+          console.error('Failed to log failed password attempt:', logError);
+        }
+        
         return res.status(401).json({ message: 'รหัสผ่านไม่ถูกต้อง' });
       }
 
@@ -1284,6 +1332,32 @@ const userController = {
 
       // รีเซ็ต login attempts เมื่อสำเร็จ
       updateLoginAttempts(username, ip, true);
+
+      // Log successful login
+      try {
+        await auditLogger.logAuth(req, 'login', {
+          description: `ผู้ใช้ ${username} เข้าสู่ระบบสำเร็จ`,
+          data: {
+            user_id: user.user_id,
+            username: user.username,
+            role: role?.name,
+            login_time: new Date().toISOString()
+          }
+        });
+      } catch (logError) {
+        console.error('Failed to log login activity:', logError);
+      }
+
+      // Log successful login
+      await auditLogger.logAuth(req, 'login', {
+        description: `User ${username} logged in successfully`,
+        data: {
+          user_id: user.user_id,
+          username: user.username,
+          role: role?.name,
+          login_time: new Date().toISOString()
+        }
+      });
 
       // ส่งข้อมูล user (ไม่รวม password) + token + เฉพาะ field ที่จำเป็น
       const { user_id, user_code, username: userUsername, Fullname, email, phone, avatar, street, parish, district, province, postal_no, branch_name, position_name } = user;
@@ -1759,12 +1833,34 @@ const userController = {
         return res.status(400).json({ message: 'Missing line_notify_enabled' });
       }
 
+      // Get user information before update for audit logging
+      const user = await User.findById(userId);
+      if (!user) {
+        console.log('Error: User not found');
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const oldStatus = user.line_notify_enabled;
+      const newStatus = line_notify_enabled;
+
       const result = await User.updateLineNotifyEnabled(userId, line_notify_enabled);
       console.log('Update result:', result);
 
       if (result.affectedRows === 0) {
-        console.log('Error: User not found');
-        return res.status(404).json({ message: 'User not found' });
+        console.log('Error: Update failed');
+        return res.status(404).json({ message: 'Update failed' });
+      }
+
+      // Log LINE notification setting change
+      try {
+        const statusText = newStatus ? 'เปิด' : 'ปิด';
+        await auditLogger.logCRUD(req, 'update', 'users', userId,
+          `${statusText}การแจ้งเตือน LINE: ${user.username} (${user.Fullname})`, 
+          { line_notify_enabled: oldStatus },
+          { line_notify_enabled: newStatus }
+        );
+      } catch (logError) {
+        console.error('Failed to log LINE notification setting change:', logError);
       }
 
       console.log('Success: LINE notify updated');
@@ -1898,6 +1994,7 @@ const userController = {
   logout: async (req, res) => {
     try {
       const userId = req.user.user_id;
+      const username = req.user.username;
       const token = req.headers.authorization?.replace('Bearer ', '');
 
       if (token) {
@@ -1911,6 +2008,16 @@ const userController = {
           activeSessions.set(userId, updatedSessions);
         }
       }
+
+      // Log logout activity
+      await auditLogger.logAuth(req, 'logout', {
+        description: `ผู้ใช้ ${username} ออกจากระบบ`,
+        data: {
+          user_id: userId,
+          username,
+          logout_time: new Date().toISOString()
+        }
+      });
 
       res.json({ message: 'ออกจากระบบสำเร็จ' });
     } catch (err) {
