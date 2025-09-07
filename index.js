@@ -41,6 +41,7 @@ import cloudinaryRoutes from './routes/cloudinaryRoutes.js';
 import notificationSettingsRoutes from './routes/notificationSettingsRoutes.js';
 import paymentSettingsRoutes from './routes/paymentSettingsRoutes.js';
 import footerRoutes from './routes/footerRoutes.js';
+import auditLogRoutes from './routes/auditLogRoutes.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -433,11 +434,39 @@ app.use('/api/line', lineRoutes);
 // ตัวนี้ค่อยใส่ทีหลัง
 app.use(express.json());
 
+// Import and add audit logging middleware
+import auditLogger from './utils/auditLogger.js';
+import AuditLog from './models/auditLogModel.js';
+
+// Initialize audit logs table on startup
+AuditLog.createTable().catch(console.error);
+
+// Add audit logging middleware (before routes)
+app.use(auditLogger.middleware());
+
 
 
 // Serve static files from uploads directory with proper MIME types
 // Apply CORS before static serving
-app.use('/uploads', cors(corsOptions), express.static(path.join(__dirname, '/uploads'), {
+app.use('/uploads', cors(corsOptions), 
+  // Add audit logging middleware for file downloads
+  async (req, res, next) => {
+    // Only log actual file requests (not directory listings)
+    if (req.path && req.path !== '/' && !req.path.endsWith('/')) {
+      try {
+        const filename = req.path.split('/').pop();
+        await auditLogger.logFile(req, 'download', filename, {
+          file_path: req.path,
+          user_agent: req.get('User-Agent') || 'Unknown',
+          referer: req.get('Referer') || 'Direct access'
+        });
+      } catch (logError) {
+        console.error('Failed to log file download:', logError);
+      }
+    }
+    next();
+  },
+  express.static(path.join(__dirname, '/uploads'), {
   setHeaders: (res, path) => {
     const ext = path.split('.').pop().toLowerCase();
 
@@ -526,6 +555,7 @@ app.use('/api/cloudinary', cloudinaryRoutes);
 app.use('/api/notification-settings', notificationSettingsRoutes);
 app.use('/api/payment-settings', paymentSettingsRoutes);
 app.use('/api/footer-settings', footerRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
 // Executive dashboard analytics endpoints
 import dashboardRoutes from './routes/dashboardRoutes.js';

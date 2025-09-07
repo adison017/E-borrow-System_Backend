@@ -1,5 +1,6 @@
 import { cloudinaryUtils } from '../utils/cloudinaryUtils.js';
 import pool from '../db.js';
+import auditLogger from '../utils/auditLogger.js';
 
 const cloudinaryController = {
   // Get Cloudinary configuration
@@ -74,6 +75,19 @@ const cloudinaryController = {
       const result = await cloudinaryUtils.uploadBase64(dataUri, folder);
 
       if (result.success) {
+        // Log file upload
+        try {
+          await auditLogger.logFile(req, 'upload', file.originalname, {
+            file_size: file.size,
+            file_type: file.mimetype,
+            cloudinary_url: result.url,
+            cloudinary_public_id: result.public_id,
+            folder
+          });
+        } catch (logError) {
+          console.error('Failed to log file upload:', logError);
+        }
+        
         res.json({
           success: true,
           message: 'อัปโหลดไฟล์สำเร็จ',
@@ -129,6 +143,23 @@ const cloudinaryController = {
       const successCount = results.filter(r => r.success).length;
       const failedCount = results.length - successCount;
 
+      // Log multiple file upload
+      try {
+        await auditLogger.logFile(req, 'upload', `${successCount} ไฟล์หลายไฟล์`, {
+          total_files: req.files.length,
+          success_count: successCount,
+          failed_count: failedCount,
+          folder,
+          file_details: req.files.map(f => ({
+            filename: f.originalname,
+            size: f.size,
+            type: f.mimetype
+          }))
+        });
+      } catch (logError) {
+        console.error('Failed to log multiple file upload:', logError);
+      }
+
       res.json({
         success: true,
         message: `อัปโหลดไฟล์สำเร็จ ${successCount} ไฟล์${failedCount > 0 ? `, ล้มเหลว ${failedCount} ไฟล์` : ''}`,
@@ -159,6 +190,16 @@ const cloudinaryController = {
       const result = await cloudinaryUtils.deleteFile(public_id);
 
       if (result.success) {
+        // Log file deletion
+        try {
+          await auditLogger.logFile(req, 'delete', public_id, {
+            cloudinary_public_id: public_id,
+            deletion_result: result.result
+          });
+        } catch (logError) {
+          console.error('Failed to log file deletion:', logError);
+        }
+        
         res.json({
           success: true,
           message: 'ลบไฟล์สำเร็จ',

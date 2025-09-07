@@ -7,6 +7,7 @@ import authMiddleware from '../middleware/authMiddleware.js';
 import { uploadEquipmentImage, createEquipmentUploadWithItemCode, handleCloudinaryUpload, cloudinaryUtils } from '../utils/cloudinaryUtils.js';
 import { uploadEquipmentImage as uploadEquipmentToCloudinary } from '../utils/cloudinaryUploadUtils.js';
 import multer from 'multer';
+import auditLogger from '../utils/auditLogger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -108,6 +109,20 @@ const handleUpload = async (req, res, item_code) => {
         }
       });
 
+      // Log file upload
+      try {
+        await auditLogger.logFile(req, 'upload', req.file.originalname, {
+          file_size: req.file.size,
+          file_type: req.file.mimetype,
+          cloudinary_url: cloudinaryUrl,
+          cloudinary_public_id: publicId,
+          item_code: item_code,
+          upload_type: 'equipment_image'
+        });
+      } catch (logError) {
+        console.error('Failed to log equipment image upload:', logError);
+      }
+
       res.json({
         url: cloudinaryUrl,
         public_id: publicId,
@@ -153,6 +168,20 @@ const handleUploadWithFile = async (req, res, item_code) => {
         item_code: item_code,
         public_id: result.public_id
       });
+
+      // Log file upload
+      try {
+        await auditLogger.logFile(req, 'upload', file.originalname, {
+          file_size: file.size,
+          file_type: file.mimetype,
+          cloudinary_url: result.url,
+          cloudinary_public_id: result.public_id,
+          item_code: item_code,
+          upload_type: 'equipment_image'
+        });
+      } catch (logError) {
+        console.error('Failed to log equipment image upload:', logError);
+      }
 
       res.json({
         url: result.url,
