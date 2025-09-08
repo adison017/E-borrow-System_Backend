@@ -73,8 +73,8 @@ server = http.createServer(app);
 const defaultDevOrigins = [
   'http://localhost:5033',
   'http://127.0.0.1:5033',
-  'https://e-borrow-system.vercel.app', // Production frontend URL
-  'https://eborrow-system.vercel.app'   // Alternative frontend URL (without dash)
+  'https://e-borrow-system.vercel.app' // Production frontend URL
+     // Alternative frontend URL (without dash)
 ];
 const configuredOrigins = (process.env.FRONTEND_URLS || '')
   .split(',')
@@ -669,7 +669,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 65033;
+const PORT = process.env.PORT || 5000;
 
 // Get server URL for logging
 const getServerUrl = () => {
