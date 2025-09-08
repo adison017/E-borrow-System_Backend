@@ -1221,19 +1221,25 @@ export const updateBorrowerLocation = async (req, res) => {
     console.log('Updated location data:', locationData);
     console.log('Thai time:', thaiTimeString);
 
-    // Log location update
-    try {
-      await auditLogger.logBusiness(req, 'update', 
-        `อัปเดตตำแหน่งผู้ยืม: ${borrow.borrow_code}`, {
-          borrow_id: id,
-          borrow_code: borrow.borrow_code,
-          location: locationData,
-          timestamp: thaiTimeString
-        }, 
-        { old_location: borrow.borrower_location }, 
-        'borrow_transactions', id);
-    } catch (logError) {
-      console.error('Failed to log location update:', logError);
+    // Skip logging for borrower position updates
+    // ไม่ต้องบันทึกลง db log สำหรับการอัปเดตตำแหน่งผู้ยืม
+    const shouldSkipAudit = true;
+    
+    if (!shouldSkipAudit) {
+      // Log location update
+      try {
+        await auditLogger.logBusiness(req, 'update', 
+          `อัปเดตตำแหน่งผู้ยืม: ${borrow.borrow_code}`, {
+            borrow_id: id,
+            borrow_code: borrow.borrow_code,
+            location: locationData,
+            timestamp: thaiTimeString
+          }, 
+          { old_location: borrow.borrower_location }, 
+          'borrow_transactions', id);
+      } catch (logError) {
+        console.error('Failed to log location update:', logError);
+      }
     }
 
     res.json({

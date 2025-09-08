@@ -4,20 +4,20 @@ import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Middleware to require admin role for all audit log routes
-const requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
+// Middleware to require admin or executive role for all audit log routes
+const requireAdminOrExecutive = (req, res, next) => {
+  if (!req.user || (req.user.role !== 'admin' && req.user.role !== 'executive')) {
     return res.status(403).json({
       success: false,
-      message: 'Access denied. Admin role required.'
+      message: 'Access denied. Admin or Executive role required.'
     });
   }
   next();
 };
 
-// Apply auth and admin middleware to all routes
+// Apply auth and role middleware to all routes
 router.use(authMiddleware);
-router.use(requireAdmin);
+router.use(requireAdminOrExecutive);
 
 // Initialize audit logs table
 router.post('/initialize', auditLogController.initializeTable);

@@ -1,4 +1,3 @@
-
 import express from 'express';
 import fs from 'fs';
 import multer from 'multer';
@@ -28,16 +27,8 @@ router.post('/verify-otp', userController.verifyPasswordOtp);
 // เปลี่ยนรหัสผ่าน (reset password)
 router.post('/reset-password', userController.resetPassword);
 
-// CORS middleware - Removed to avoid conflicts with main CORS configuration
-// The main CORS configuration in index.js handles all CORS requirements
-
-// Debug middleware to log all requests
-router.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
-  console.log('Request Headers:', req.headers);
-  console.log('Request Body:', req.body);
-  next();
-});
+// Remove debug middleware to prevent excessive logging
+// Debug middleware to log all requests - REMOVED
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,10 +53,13 @@ const storage = multer.diskStorage({
 
 // File filter for image upload
 const fileFilter = (req, file, cb) => {
-  console.log('File filter checking file:', {
-    originalname: file.originalname,
-    mimetype: file.mimetype
-  });
+  // Only log in development mode
+  if (process.env.NODE_ENV === 'development') {
+    console.log('File filter checking file:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype
+    });
+  }
   // Accept only jpg and png
   if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
     cb(null, true);

@@ -107,7 +107,7 @@ const AuditLog = {
         table_name,
         start_date,
         end_date,
-        limit = 50,
+        limit = 25,
         offset = 0,
         search
       } = filters;

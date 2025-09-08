@@ -50,7 +50,10 @@ class AuditLogger {
         response_time_ms: responseTime
       });
     } catch (error) {
-      console.error('Failed to log auth activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log auth activity:', error);
+      }
     }
   }
 
@@ -80,7 +83,10 @@ class AuditLogger {
         response_time_ms: responseTime
       });
     } catch (error) {
-      console.error('Failed to log CRUD activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log CRUD activity:', error);
+      }
     }
   }
 
@@ -110,7 +116,10 @@ class AuditLogger {
         response_time_ms: responseTime
       });
     } catch (error) {
-      console.error('Failed to log business activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log business activity:', error);
+      }
     }
   }
 
@@ -135,7 +144,10 @@ class AuditLogger {
         response_time_ms: responseTime
       });
     } catch (error) {
-      console.error('Failed to log file activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log file activity:', error);
+      }
     }
   }
 
@@ -158,7 +170,10 @@ class AuditLogger {
         request_url: req.originalUrl
       });
     } catch (error) {
-      console.error('Failed to log system activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log system activity:', error);
+      }
     }
   }
 
@@ -181,7 +196,10 @@ class AuditLogger {
         request_url: req.originalUrl
       });
     } catch (error) {
-      console.error('Failed to log permission activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log permission activity:', error);
+      }
     }
   }
 
@@ -207,7 +225,10 @@ class AuditLogger {
         request_url: req.originalUrl
       });
     } catch (error) {
-      console.error('Failed to log status change:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log status change:', error);
+      }
     }
   }
 
@@ -230,7 +251,10 @@ class AuditLogger {
         request_url: req.originalUrl
       });
     } catch (error) {
-      console.error('Failed to log activity:', error);
+      // Only log errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to log activity:', error);
+      }
     }
   }
 
@@ -240,10 +264,25 @@ class AuditLogger {
       const startTime = Date.now();
       req._startTime = startTime; // Store start time on request object
       
+      // Skip logging for certain paths to reduce repetitive logs
+      if (req.originalUrl === '/api/users/verify-token' && req.method === 'GET') {
+        return next();
+      }
+      
       // Override res.end to capture response
       const originalEnd = res.end;
       res.end = function(...args) {
         const responseTime = Date.now() - startTime;
+        
+        // Skip logging for borrower location updates
+        if (req.originalUrl.includes('/location') && req.method === 'PUT') {
+          return originalEnd.apply(this, args);
+        }
+        
+        // Skip logging for verify-token endpoints to reduce repetitive logs
+        if (req.originalUrl.includes('/verify-token')) {
+          return originalEnd.apply(this, args);
+        }
         
         // Only log essential operations
         const essentialPaths = [
@@ -252,7 +291,8 @@ class AuditLogger {
           '/api/rooms',
           '/api/categories',
           '/api/borrows',
-          '/api/repairs'
+          '/api/repairs',
+          '/api/news'
         ];
         
         const isEssentialOperation = essentialPaths.some(path => req.originalUrl.includes(path));
@@ -275,7 +315,7 @@ class AuditLogger {
             else if (req.method === 'POST') actionType = 'borrow';
           }
           
-          // Log the operation
+          // Log the operation only once
           AuditLog.log({
             user_id,
             username,
@@ -288,7 +328,10 @@ class AuditLogger {
             status_code: res.statusCode,
             response_time_ms: responseTime
           }).catch(error => {
-            console.error('Failed to log operation:', error);
+            // Only log errors in development
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Failed to log operation:', error);
+            }
           });
         }
         
