@@ -22,6 +22,9 @@ import { startNotificationCron } from './cron/notifySchedule.js';
 import * as BorrowModel from './models/borrowModel.js';
 import * as RepairRequest from './models/repairRequestModel.js';
 
+// Import database pool for graceful shutdown
+import pool from './db.js';
+
 // Import routes
 import branchRoutes from './routes/branchRoutes.js';
 import newsRoutes from './routes/newsRoutes.js';
@@ -685,6 +688,70 @@ app.use((req, res, next) => {
 
 // เริ่มต้น cron jobs
 startNotificationCron();
+
+// Graceful shutdown function
+const shutdown = async () => {
+  console.log('Shutting down gracefully...');
+  
+  try {
+    // Close Socket.IO server
+    if (io) {
+      io.close(() => {
+        console.log('Socket.IO server closed');
+      });
+    }
+    
+    // Close HTTP server
+    if (server) {
+      server.close(() => {
+        console.log('HTTP server closed');
+      });
+    }
+    
+    // Close database pool
+    if (pool) {
+      await pool.end();
+      console.log('Database pool closed');
+    }
+    
+    console.log('Graceful shutdown completed');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Global error handling - จัดการ uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION! 💥 Shutting down...');
+  console.error('Error details:', err);
+  console.error('Error stack:', err.stack);
+  
+  // Gracefully shutdown server
+  shutdown();
+});
+
+// Global error handling - จัดการ unhandled promise rejections
+process.on('unhandledRejection', (err) => {
+  console.error('UNHANDLED REJECTION! 💥 Shutting down...');
+  console.error('Error details:', err);
+  
+  // Gracefully shutdown server
+  shutdown();
+});
+
+// Graceful shutdown on SIGTERM
+process.on('SIGTERM', () => {
+  console.log('👋 SIGTERM RECEIVED. Shutting down gracefully');
+  shutdown();
+});
+
+// Graceful shutdown on SIGINT (Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('👋 SIGINT RECEIVED. Shutting down gracefully');
+  shutdown();
+});
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

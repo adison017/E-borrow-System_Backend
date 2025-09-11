@@ -127,7 +127,13 @@ export const getRepairRequestsByUserId = async (user_id) => {
 
 export const getRepairRequestsByItemId = async (item_id) => {
   try {
-    const [rows] = await connection.query('SELECT * FROM repair_requests WHERE item_id = ?', [item_id]);
+    // Fetch only the most recent approved repair request for the item
+    const [rows] = await connection.query(`
+      SELECT * FROM repair_requests 
+      WHERE item_id = ? AND status = 'approved'
+      ORDER BY approval_date DESC 
+      LIMIT 1
+    `, [item_id]);
     return rows;
   } catch (error) {
     throw error;

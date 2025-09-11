@@ -19,6 +19,24 @@ const pool = mysql.createPool({
   charset: 'utf8mb4_unicode_ci'
 });
 
+// Monitor pool events for debugging
+if (process.env.NODE_ENV === 'development') {
+  pool.on('connection', (connection) => {
+    console.log(`✅ New DB connection established (ID: ${connection.threadId})`);
+  });
+
+  pool.on('acquire', (connection) => {
+    console.log(`🔒 Connection ${connection.threadId} acquired`);
+  });
+
+  pool.on('release', (connection) => {
+    console.log(`🔓 Connection ${connection.threadId} released`);
+  });
+
+  pool.on('enqueue', () => {
+    console.log('⏳ Waiting for available connection slot');
+  });
+}
 
 // Test the connection
 const testConnection = async () => {

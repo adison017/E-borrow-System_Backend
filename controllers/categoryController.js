@@ -1,5 +1,4 @@
 import * as Category from '../models/categoryModel.js';
-import auditLogger from '../utils/auditLogger.js';
 
 export const getAllCategories = async (req, res) => {
   try {
@@ -22,19 +21,7 @@ export const getCategoryById = async (req, res) => {
 
 export const addCategory = async (req, res) => {
   try {
-    const result = await Category.addCategory(req.body);
-    
-    // Log the creation activity
-    await auditLogger.logCRUD(
-      req, 
-      'create', 
-      'categories', 
-      result.insertId, 
-      `สร้างหมวดหมู่ใหม่: ${req.body.category_name}`,
-      null,
-      req.body
-    );
-    
+    await Category.addCategory(req.body);
     res.status(201).json({ message: 'Category added' });
   } catch (err) {
     // ตรวจสอบ error type เพื่อส่ง status code ที่เหมาะสม
@@ -48,23 +35,7 @@ export const addCategory = async (req, res) => {
 
 export const updateCategory = async (req, res) => {
   try {
-    // Get the existing category for logging purposes
-    const existingCategoryResult = await Category.getCategoryById(req.params.id);
-    const existingCategory = existingCategoryResult[0];
-    
     await Category.updateCategory(req.params.id, req.body);
-    
-    // Log the update activity
-    await auditLogger.logCRUD(
-      req, 
-      'update', 
-      'categories', 
-      req.params.id, 
-      `อัปเดตหมวดหมู่: ${req.body.category_name || existingCategory?.category_name}`,
-      existingCategory,
-      req.body
-    );
-    
     res.json({ message: 'Category updated' });
   } catch (err) {
     // ตรวจสอบ error type เพื่อส่ง status code ที่เหมาะสม
@@ -78,23 +49,7 @@ export const updateCategory = async (req, res) => {
 
 export const deleteCategory = async (req, res) => {
   try {
-    // Get the existing category for logging purposes
-    const existingCategoryResult = await Category.getCategoryById(req.params.id);
-    const existingCategory = existingCategoryResult[0];
-    
     await Category.deleteCategory(req.params.id);
-    
-    // Log the deletion activity
-    await auditLogger.logCRUD(
-      req, 
-      'delete', 
-      'categories', 
-      req.params.id, 
-      `ลบหมวดหมู่: ${existingCategory?.category_name}`,
-      existingCategory,
-      null
-    );
-    
     res.json({ message: 'Category deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
