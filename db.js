@@ -13,9 +13,9 @@ const pool = mysql.createPool({
   connectionLimit: 20, // Increased from 10 to 20 connections
   queueLimit: 0,
   dateStrings: true, // คืนวันที่เป็น string ตรงจาก DB
+  // Correct MySQL2 configuration options
   acquireTimeout: 60000, // 60 seconds to acquire connection
-  timeout: 60000, // 60 seconds query timeout
-  reconnect: true,
+  // Remove invalid options that cause warnings
   charset: 'utf8mb4_unicode_ci'
 });
 

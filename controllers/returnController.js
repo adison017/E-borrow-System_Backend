@@ -643,10 +643,28 @@ export const getReturnsByBorrowId = async (req, res) => {
 export const getAllReturns_pay = async (req, res) => {
   try {
     const user_id = req.query.user_id;
-    const rows = await (await import('../models/returnModel.js')).getAllReturns_pay(user_id);
+    // Directly call the model function instead of using dynamic import
+    const rows = await ReturnModel.getAllReturns_pay(user_id);
+    
+    // Add logging to debug the response
+    console.log('getAllReturns_pay result:', {
+      type: typeof rows,
+      isArray: Array.isArray(rows),
+      length: Array.isArray(rows) ? rows.length : undefined,
+      firstItem: Array.isArray(rows) && rows.length > 0 ? rows[0] : undefined
+    });
+    
+    // Ensure we always return an array
+    if (!Array.isArray(rows)) {
+      console.error('getAllReturns_pay did not return an array:', typeof rows, rows);
+      return res.json([]); // Return empty array instead of error
+    }
+    
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
+    console.error('Error in getAllReturns_pay:', err);
+    // Return empty array on error instead of 500 to prevent frontend crash
+    res.json([]);
   }
 };
 
@@ -1145,5 +1163,31 @@ export const adminRejectSlip = async (req, res) => {
   } catch (err) {
     console.error('[adminRejectSlip] error:', err);
     return res.status(500).json({ success: false, message: 'Reject slip failed', error: err.message });
+  }
+};
+
+// Add a simple test function to verify the database query
+export const testSummary = async (req, res) => {
+  try {
+    console.log('Testing summary endpoint');
+    const user_id = req.query.user_id;
+    console.log('User ID:', user_id);
+    
+    // Test the database connection and simple query
+    const [testRows] = await (await import('../db.js')).default.query('SELECT 1 as test');
+    console.log('Database connection test:', testRows);
+    
+    // Call the model function
+    const rows = await ReturnModel.getAllReturns_pay(user_id);
+    console.log('Model function returned:', {
+      type: typeof rows,
+      isArray: Array.isArray(rows),
+      length: Array.isArray(rows) ? rows.length : undefined
+    });
+    
+    res.json(rows);
+  } catch (err) {
+    console.error('Error in testSummary:', err);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message, stack: err.stack });
   }
 };

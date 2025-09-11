@@ -16,6 +16,7 @@ export const getHistoryRequests = async () => {
         rr.problem_description,
         rr.request_date,
         rr.estimated_cost,
+        rr.budget,
         rr.pic_filename AS repair_pic,
         rr.status,
         rr.repair_code,
@@ -46,10 +47,12 @@ export const getHistoryRequests = async () => {
       };
     });
 
-    return parsedRows;
+    // Always return an array
+    return Array.isArray(parsedRows) ? parsedRows : [];
   } catch (error) {
     console.error('getApprovedCompletedIncompleteRequests error:', error);
-    throw error;
+    // Always return an empty array on error
+    return [];
   }
 };
 import connection from '../db.js';
@@ -100,10 +103,12 @@ WHERE rr.status = "pending";
       };
     });
 
-    return parsedRows;
+    // Always return an array
+    return Array.isArray(parsedRows) ? parsedRows : [];
   } catch (error) {
     console.error('getAllRepairRequests error:', error);
-    throw error;
+    // Always return an empty array on error
+    return [];
   }
 };
 
