@@ -25,7 +25,9 @@ export const getAllReturns = async () => {
   bt.signature_image,
   bt.handover_photo,
   bt.important_documents,
-  ret.pay_status
+  ret.pay_status,
+  ret.return_by,
+  returner.Fullname AS return_by_name
 FROM borrow_transactions bt
 JOIN users u ON bt.user_id = u.user_id
 JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
@@ -36,6 +38,7 @@ LEFT JOIN roles r ON u.role_id = r.role_id
 LEFT JOIN (
   SELECT * FROM returns
 ) ret ON bt.borrow_id = ret.borrow_id
+LEFT JOIN users returner ON ret.return_by = returner.user_id
     WHERE bt.status = 'approved' OR bt.status = 'waiting_payment';`
   );
 
@@ -64,6 +67,8 @@ LEFT JOIN (
         signature_image: row.signature_image,
         handover_photo: row.handover_photo,
         important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+        return_by: row.return_by,
+        return_by_name: row.return_by_name
       };
     }
     grouped[row.borrow_id].equipment.push({
@@ -79,124 +84,138 @@ LEFT JOIN (
 };
 
 export const getAllReturns_pay = async (user_id = null) => {
-  let sql = `SELECT
-    ret.return_id,  -- เพิ่ม return_id
-    bt.borrow_id,
-    bt.borrow_code,
-    u.fullname,
-    b.branch_name,
-    p.position_name,
-    r.role_name,
-    u.avatar,
-    e.name,
-    e.item_id,
-    e.item_code,
-    e.pic,
-    e.price,
-    bi.quantity,
-    bt.borrow_date,
-    bt.user_id,
-    bt.return_date,
-    bt.status,
-    bt.purpose,
-    bt.user_id,
-    bt.signature_image,
-    bt.handover_photo,
-    bt.important_documents,
-    ret.pay_status,
-    ret.damage_fine,
-    ret.late_fine,
-    ret.late_days,
-    ret.return_date AS return_date_real,
-    ret.payment_method,
-    ret.proof_image,
-    ret.notes
-  FROM borrow_transactions bt
-  JOIN users u ON bt.user_id = u.user_id
-  JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
-  JOIN equipment e ON bi.item_id = e.item_id
-  LEFT JOIN branches b ON u.branch_id = b.branch_id
-  LEFT JOIN positions p ON u.position_id = p.position_id
-  LEFT JOIN roles r ON u.role_id = r.role_id
-  LEFT JOIN returns ret ON bt.borrow_id = ret.borrow_id
-  WHERE ret.pay_status IN ('pending','failed','awaiting_payment')`;
+  try {
+    let sql = `SELECT
+      ret.return_id,  /* เพิ่ม return_id */
+      bt.borrow_id,
+      bt.borrow_code,
+      u.fullname,
+      b.branch_name,
+      p.position_name,
+      r.role_name,
+      u.avatar,
+      e.name,
+      e.item_id,
+      e.item_code,
+      e.pic,
+      e.price,
+      bi.quantity,
+      bt.borrow_date,
+      bt.user_id,
+      bt.return_date,
+      bt.status,
+      bt.purpose,
+      bt.user_id,
+      bt.signature_image,
+      bt.handover_photo,
+      bt.important_documents,
+      ret.pay_status,
+      ret.damage_fine,
+      ret.late_fine,
+      ret.late_days,
+      ret.return_date AS return_date_real,
+      ret.payment_method,
+      ret.proof_image,
+      ret.notes,
+      ret.return_by,
+      returner.Fullname AS return_by_name
+    FROM borrow_transactions bt
+    JOIN users u ON bt.user_id = u.user_id
+    JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
+    JOIN equipment e ON bi.item_id = e.item_id
+    LEFT JOIN branches b ON u.branch_id = b.branch_id
+    LEFT JOIN positions p ON u.position_id = p.position_id
+    LEFT JOIN roles r ON u.role_id = r.role_id
+    LEFT JOIN returns ret ON bt.borrow_id = ret.borrow_id
+    LEFT JOIN users returner ON ret.return_by = returner.user_id
+    WHERE ret.pay_status IN ('pending','failed','awaiting_payment', 'paid')`;
 
-  const params = [];
-  if (user_id) {
-    sql += ' AND bt.user_id = ?';
-    params.push(user_id);
-  }
-  const [rows] = await db.query(sql, params);
-
-  // ดึง return_items ทั้งหมดที่เกี่ยวข้อง
-  const returnIds = Array.from(new Set(rows.map(row => row.return_id).filter(Boolean)));
-  let returnItemsMap = {};
-  if (returnIds.length > 0) {
-    const [returnItems] = await db.query(
-      `SELECT * FROM return_items WHERE return_id IN (${returnIds.map(() => '?').join(',')})`,
-      returnIds
-    );
-    // สร้าง map: { return_id: { item_id: { ... } } }
-    returnItemsMap = returnItems.reduce((acc, item) => {
-      if (!acc[item.return_id]) acc[item.return_id] = {};
-      acc[item.return_id][item.item_id] = item;
-      return acc;
-    }, {});
-  }
-
-  // Group by return_id
-  const grouped = {};
-  rows.forEach(row => {
-    if (!grouped[row.borrow_id]) {
-      grouped[row.borrow_id] = {
-        return_id: row.return_id, // เพิ่มตรงนี้
-        borrow_id: row.borrow_id,
-        borrow_code: row.borrow_code,
-        borrower: {
-          name: row.fullname,
-          position: row.position_name,
-          department: row.branch_name,
-          avatar: row.avatar,
-          role: row.role_name,
-        },
-        equipment: [],
-        borrow_date: row.borrow_date,
-        due_date: row.return_date,
-        status: row.status,
-        purpose: row.purpose,
-        user_id: row.user_id,
-        borrower_name: row.borrower_name,
-        pay_status: row.pay_status || 'pending',
-        damage_fine: row.damage_fine,
-        late_fine: row.late_fine,
-        late_days: row.late_days,
-        return_date: row.return_date_real,
-        payment_method: row.payment_method,
-        proof_image: row.proof_image || null,
-        notes: row.notes || null,
-        signature_image: row.signature_image,
-        handover_photo: row.handover_photo,
-        important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
-      };
+    const params = [];
+    if (user_id) {
+      sql += ' AND bt.user_id = ?';
+      params.push(user_id);
     }
-    // เพิ่มข้อมูลสภาพครุภัณฑ์จาก return_items
-    let itemCondition = null;
-    if (row.return_id && returnItemsMap[row.return_id] && returnItemsMap[row.return_id][row.item_id]) {
-      itemCondition = returnItemsMap[row.return_id][row.item_id];
+    const [rows] = await db.query(sql, params);
+
+    // ดึง return_items ทั้งหมดที่เกี่ยวข้อง
+    const returnIds = Array.from(new Set(rows.map(row => row.return_id).filter(Boolean)));
+    let returnItemsMap = {};
+    if (returnIds.length > 0) {
+      const [returnItems] = await db.query(
+        `SELECT * FROM return_items WHERE return_id IN (${returnIds.map(() => '?').join(',')})`,
+        returnIds
+      );
+      // สร้าง map: { return_id: { item_id: { ... } } }
+      returnItemsMap = returnItems.reduce((acc, item) => {
+        if (!acc[item.return_id]) acc[item.return_id] = {};
+        acc[item.return_id][item.item_id] = item;
+        return acc;
+      }, {});
     }
-    grouped[row.borrow_id].equipment.push({
-      item_id: row.item_id,
-      item_code: row.item_code,
-      name: row.name,
-      quantity: row.quantity,
-      pic: row.pic,
-      price: row.price,
-      fine_amount: itemCondition ? itemCondition.fine_amount : 0,
-      damage_level_id: itemCondition ? itemCondition.damage_level_id : null,
-      damage_note: itemCondition ? itemCondition.damage_note : '',
+
+    // Group by return_id
+    const grouped = {};
+    rows.forEach(row => {
+      if (!grouped[row.borrow_id]) {
+        grouped[row.borrow_id] = {
+          return_id: row.return_id, /* เพิ่มตรงนี้ */
+          borrow_id: row.borrow_id,
+          borrow_code: row.borrow_code,
+          borrower: {
+            name: row.fullname,
+            position: row.position_name,
+            department: row.branch_name,
+            avatar: row.avatar,
+            role: row.role_name,
+          },
+          equipment: [],
+          borrow_date: row.borrow_date,
+          due_date: row.return_date,
+          status: row.status,
+          purpose: row.purpose,
+          user_id: row.user_id,
+          borrower_name: row.borrower_name,
+          pay_status: row.pay_status || 'pending',
+          damage_fine: row.damage_fine,
+          late_fine: row.late_fine,
+          late_days: row.late_days,
+          return_date: row.return_date_real,
+          payment_method: row.payment_method,
+          proof_image: row.proof_image || null,
+          notes: row.notes || null,
+          signature_image: row.signature_image,
+          handover_photo: row.handover_photo,
+          important_documents: row.important_documents ? JSON.parse(row.important_documents) : [],
+          return_by: row.return_by,
+          return_by_name: row.return_by_name
+        };
+      }
+      // เพิ่มข้อมูลสภาพครุภัณฑ์จาก return_items
+      let itemCondition = null;
+      if (row.return_id && returnItemsMap[row.return_id] && returnItemsMap[row.return_id][row.item_id]) {
+        itemCondition = returnItemsMap[row.return_id][row.item_id];
+      }
+      grouped[row.borrow_id].equipment.push({
+        item_id: row.item_id,
+        item_code: row.item_code,
+        name: row.name,
+        quantity: row.quantity,
+        pic: row.pic,
+        price: row.price,
+        fine_amount: itemCondition ? itemCondition.fine_amount : 0,
+        damage_level_id: itemCondition ? itemCondition.damage_level_id : null,
+        damage_note: itemCondition ? itemCondition.damage_note : '',
+      });
     });
-  });
-  return Object.values(grouped);
+    
+    // Always return an array, even if empty
+    const result = Object.values(grouped);
+    return Array.isArray(result) ? result : [];
+  } catch (error) {
+    console.error('Error in getAllReturns_pay:', error);
+    // Always return an empty array on error
+    return [];
+  }
 };
 
 
