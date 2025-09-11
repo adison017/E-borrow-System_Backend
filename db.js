@@ -10,9 +10,13 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 20, // Increased from 10 to 20 connections
   queueLimit: 0,
-  dateStrings: true // คืนวันที่เป็น string ตรงจาก DB
+  dateStrings: true, // คืนวันที่เป็น string ตรงจาก DB
+  acquireTimeout: 60000, // 60 seconds to acquire connection
+  timeout: 60000, // 60 seconds query timeout
+  reconnect: true,
+  charset: 'utf8mb4_unicode_ci'
 });
 
 
@@ -30,4 +34,3 @@ const testConnection = async () => {
 testConnection();
 
 export default pool;
-

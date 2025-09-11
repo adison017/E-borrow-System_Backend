@@ -33,7 +33,7 @@ const auditLogController = {
         table_name,
         start_date,
         end_date,
-        limit = 50,
+        limit = 25,
         offset = 0,
         search
       } = req.query;
@@ -100,12 +100,10 @@ const auditLogController = {
         table_name,
         start_date,
         end_date,
-        limit: 10000, // Large limit for export
-        offset: 0,
         search
       };
 
-      const result = await AuditLog.getLogs(filters);
+      const result = await AuditLog.exportLogs(filters);
       
       if (!result.success || !result.data.length) {
         return res.status(404).json({
@@ -178,7 +176,7 @@ const auditLogController = {
         offset: 0
       };
 
-      const result = await AuditLog.getLogs(filters);
+      const result = await AuditLog.getUserActivityReport(filters);
       
       res.json(result);
     } catch (error) {
@@ -194,24 +192,17 @@ const auditLogController = {
   // Get action types for filtering
   getActionTypes: async (req, res) => {
     try {
-      const actionTypes = [
-        { value: 'create', label: 'สร้างข้อมูล' },
-        { value: 'update', label: 'แก้ไขข้อมูล' },
-        { value: 'delete', label: 'ลบข้อมูล' },
-        { value: 'borrow', label: 'ยืมครุภัณฑ์' },
-        { value: 'return', label: 'คืนครุภัณฑ์' },
-        { value: 'approve', label: 'อนุมัติ' },
-        { value: 'reject', label: 'ปฏิเสธ' },
-        { value: 'login', label: 'เข้าสู่ระบบ' },
-        { value: 'logout', label: 'ออกจากระบบ' },
-        { value: 'upload', label: 'อัปโหลดไฟล์' },
-        { value: 'download', label: 'ดาวน์โหลดไฟล์' }
-      ];
-
-      res.json({
-        success: true,
-        data: actionTypes
-      });
+      const result = await AuditLog.getActionTypes();
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to get action types',
+          error: result.error
+        });
+      }
     } catch (error) {
       console.error('Error getting action types:', error);
       res.status(500).json({

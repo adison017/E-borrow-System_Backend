@@ -4,6 +4,7 @@ const AuditLog = {
   // Create audit_logs table if not exists
   createTable: async () => {
     try {
+      // First create the table
       const createTableQuery = `
         CREATE TABLE IF NOT EXISTS audit_logs (
           log_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -35,6 +36,32 @@ const AuditLog = {
       `;
       
       await db.execute(createTableQuery);
+      
+      // Add additional indexes for better performance
+      try {
+        // Index for combined user_id and created_at for user activity reports
+        await db.execute('CREATE INDEX idx_user_created ON audit_logs (user_id, created_at)');
+      } catch (indexError) {
+        // Index might already exist, ignore
+        console.log('Index idx_user_created already exists or creation failed');
+      }
+      
+      try {
+        // Index for combined action_type and created_at for activity summaries
+        await db.execute('CREATE INDEX idx_action_created ON audit_logs (action_type, created_at)');
+      } catch (indexError) {
+        // Index might already exist, ignore
+        console.log('Index idx_action_created already exists or creation failed');
+      }
+      
+      try {
+        // Index for search operations
+        await db.execute('CREATE INDEX idx_search ON audit_logs (description(255), username(50), request_url(100))');
+      } catch (indexError) {
+        // Index might already exist, ignore
+        console.log('Index idx_search already exists or creation failed');
+      }
+      
       console.log('✅ Audit logs table created/verified successfully');
       return { success: true };
     } catch (error) {
@@ -107,7 +134,7 @@ const AuditLog = {
         table_name,
         start_date,
         end_date,
-        limit = 50,
+        limit = 25,
         offset = 0,
         search
       } = filters;
@@ -149,6 +176,7 @@ const AuditLog = {
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
       
+      // Add a timeout to prevent long-running queries
       const query = `
         SELECT 
           al.*,
@@ -165,9 +193,13 @@ const AuditLog = {
       
       params.push(parseInt(limit), parseInt(offset));
       
-      const [logs] = await db.execute(query, params);
+      // Set a query timeout of 5 seconds
+      const [logs] = await db.execute({
+        sql: query,
+        timeout: 5000
+      }, params);
       
-      // Get total count
+      // Get total count with timeout
       const countQuery = `
         SELECT COUNT(*) as total
         FROM audit_logs al
@@ -176,7 +208,10 @@ const AuditLog = {
       `;
       
       const countParams = params.slice(0, -2); // Remove limit and offset
-      const [countResult] = await db.execute(countQuery, countParams);
+      const [countResult] = await db.execute({
+        sql: countQuery,
+        timeout: 5000
+      }, countParams);
       const total = countResult[0].total;
       
       return {
@@ -217,38 +252,48 @@ const AuditLog = {
           dateCondition = 'AND al.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)';
       }
 
-      const [activityByType] = await db.execute(`
-        SELECT 
-          action_type,
-          COUNT(*) as count
-        FROM audit_logs al
-        WHERE 1=1 ${dateCondition}
-        GROUP BY action_type
-        ORDER BY count DESC
-      `);
+      // Add timeout to prevent long-running queries
+      const [activityByType] = await db.execute({
+        sql: `
+          SELECT 
+            action_type,
+            COUNT(*) as count
+          FROM audit_logs al
+          WHERE 1=1 ${dateCondition}
+          GROUP BY action_type
+          ORDER BY count DESC
+        `,
+        timeout: 5000
+      });
 
-      const [activityByUser] = await db.execute(`
-        SELECT 
-          al.username,
-          u.Fullname,
-          COUNT(*) as activity_count
-        FROM audit_logs al
-        LEFT JOIN users u ON al.user_id = u.user_id
-        WHERE al.username IS NOT NULL ${dateCondition}
-        GROUP BY al.user_id, al.username, u.Fullname
-        ORDER BY activity_count DESC
-        LIMIT 10
-      `);
+      const [activityByUser] = await db.execute({
+        sql: `
+          SELECT 
+            al.username,
+            u.Fullname,
+            COUNT(*) as activity_count
+          FROM audit_logs al
+          LEFT JOIN users u ON al.user_id = u.user_id
+          WHERE al.username IS NOT NULL ${dateCondition}
+          GROUP BY al.user_id, al.username, u.Fullname
+          ORDER BY activity_count DESC
+          LIMIT 10
+        `,
+        timeout: 5000
+      });
 
-      const [hourlyActivity] = await db.execute(`
-        SELECT 
-          HOUR(al.created_at) as hour,
-          COUNT(*) as count
-        FROM audit_logs al
-        WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        GROUP BY HOUR(al.created_at)
-        ORDER BY hour
-      `);
+      const [hourlyActivity] = await db.execute({
+        sql: `
+          SELECT 
+            HOUR(al.created_at) as hour,
+            COUNT(*) as count
+          FROM audit_logs al
+          WHERE al.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+          GROUP BY HOUR(al.created_at)
+          ORDER BY hour
+        `,
+        timeout: 5000
+      });
 
       return {
         success: true,
@@ -261,6 +306,65 @@ const AuditLog = {
       };
     } catch (error) {
       console.error('❌ Error getting activity summary:', error);
+      throw error;
+    }
+  },
+
+  // Export logs to CSV
+  exportLogs: async (filters) => {
+    try {
+      // Reduced limit for export to prevent timeouts
+      const exportFilters = {
+        ...filters,
+        limit: 5000, // Reduced from 10000 to 5000
+        offset: 0
+      };
+
+      const result = await AuditLog.getLogs(exportFilters);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error exporting audit logs:', error);
+      throw error;
+    }
+  },
+
+  // Get user activity report
+  getUserActivityReport: async (filters) => {
+    try {
+      // Add timeout to prevent long-running queries
+      const result = await AuditLog.getLogs(filters);
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting user activity report:', error);
+      throw error;
+    }
+  },
+
+  // Get action types for filtering
+  getActionTypes: async () => {
+    try {
+      const actionTypes = [
+        { value: 'create', label: 'สร้างข้อมูล' },
+        { value: 'update', label: 'แก้ไขข้อมูล' },
+        { value: 'delete', label: 'ลบข้อมูล' },
+        { value: 'borrow', label: 'ยืมครุภัณฑ์' },
+        { value: 'return', label: 'คืนครุภัณฑ์' },
+        { value: 'approve', label: 'อนุมัติ' },
+        { value: 'reject', label: 'ปฏิเสธ' },
+        { value: 'login', label: 'เข้าสู่ระบบ' },
+        { value: 'logout', label: 'ออกจากระบบ' },
+        { value: 'upload', label: 'อัปโหลดไฟล์' },
+        { value: 'download', label: 'ดาวน์โหลดไฟล์' }
+      ];
+
+      return {
+        success: true,
+        data: actionTypes
+      };
+    } catch (error) {
+      console.error('Error getting action types:', error);
       throw error;
     }
   },

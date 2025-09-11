@@ -73,8 +73,8 @@ server = http.createServer(app);
 const defaultDevOrigins = [
   'http://localhost:5033',
   'http://127.0.0.1:5033',
-  'https://e-borrow-system.vercel.app', // Production frontend URL
-  'https://eborrow-system.vercel.app'   // Alternative frontend URL (without dash)
+  'https://e-borrow-system.vercel.app' // Production frontend URL
+     // Alternative frontend URL (without dash)
 ];
 const configuredOrigins = (process.env.FRONTEND_URLS || '')
   .split(',')
@@ -83,14 +83,19 @@ const configuredOrigins = (process.env.FRONTEND_URLS || '')
 
 const allowedOrigins = Array.from(new Set([...defaultDevOrigins, ...configuredOrigins]));
 
-// Log allowed origins for debugging
-console.log('CORS Allowed Origins:', allowedOrigins);
-console.log('FRONTEND_URLS from env:', process.env.FRONTEND_URLS);
+// Log allowed origins for debugging (only in development)
+if (process.env.NODE_ENV === 'development') {
+  console.log('CORS Allowed Origins:', allowedOrigins);
+  console.log('FRONTEND_URLS from env:', process.env.FRONTEND_URLS);
+}
 
 function isOriginAllowed(origin) {
   if (!origin) return true; // non-browser or same-origin
   const isAllowed = allowedOrigins.includes(origin);
-  console.log(`CORS Check - Origin: ${origin}, Allowed: ${isAllowed}`);
+  // Log CORS checks only in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`CORS Check - Origin: ${origin}, Allowed: ${isAllowed}`);
+  }
   return isAllowed;
 }
 
@@ -202,8 +207,6 @@ io.on('connection', async (socket) => {
     }
     userSockets.get(decoded.user_id).add(socket.id);
 
-
-
     // ส่งข้อมูล badge counts เริ่มต้น
     try {
       const [pending, carry, pendingApproval] = await Promise.all([
@@ -269,7 +272,6 @@ setInterval(() => {
     removeSocketSession(socketId);
   });
 
-
 }, 5 * 60 * 1000);
 
 // Enable CORS with specific options (allow only configured frontend origins)
@@ -280,8 +282,10 @@ const corsOptions = {
 
     if (isOriginAllowed(origin)) return callback(null, true);
 
-    // Log blocked origins for debugging
-    console.log(`CORS blocked origin: ${origin}`);
+    // Log blocked origins for debugging (only in development)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`CORS blocked origin: ${origin}`);
+    }
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -317,8 +321,8 @@ app.use((req, res, next) => {
     if (origin && isOriginAllowed(origin)) {
       res.header('Access-Control-Allow-Origin', origin);
       res.header('Vary', 'Origin');
-    } else if (origin) {
-      // Log blocked origins for debugging
+    } else if (origin && process.env.NODE_ENV === 'development') {
+      // Log blocked origins for debugging (only in development)
       console.log(`OPTIONS blocked origin: ${origin}`);
     }
 
@@ -411,7 +415,7 @@ app.use('/api/users/login', ipFloodingLimiter);
 // General rate limiting for all routes (dev ผ่อนคลายมากขึ้น)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 300 : 2000, // ผ่อนคลายใน dev
+  max: process.env.NODE_ENV === 'production' ? 300 : 5000, // ผ่อนคลายใน dev
   message: {
     message: 'Too many requests from this IP, please try again later'
   },
@@ -419,9 +423,9 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ยกเว้นเส้นทาง dashboard จาก general limiter (ลด 429 ระหว่างโหลดหลายกราฟ)
+// ยกเว้นเส้นทาง dashboard และ borrows จาก general limiter (ลด 429 ระหว่างโหลดหลายกราฟ)
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/dashboard')) return next();
+  if (req.path.startsWith('/dashboard') || req.path.startsWith('/borrows')) return next();
   return generalLimiter(req, res, next);
 });
 
@@ -443,8 +447,6 @@ AuditLog.createTable().catch(console.error);
 
 // Add audit logging middleware (before routes)
 app.use(auditLogger.middleware());
-
-
 
 // Serve static files from uploads directory with proper MIME types
 // Apply CORS before static serving
@@ -536,8 +538,8 @@ userRouter.use('/positions', positionRoutes);
 userRouter.use('/branches', branchRoutes);
 userRouter.use('/roles', roleRoutes);
 
-// Apply CORS to the user routes at the app level
-app.use('/api/users', cors(corsOptions), userRouter);
+// Apply CORS to the user routes at the app level - REMOVED duplicate CORS
+app.use('/api/users', userRouter);
 
 // Specific OPTIONS handler removed - using global handler instead
 
@@ -667,8 +669,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-
-const PORT = process.env.PORT || 65033;
+const PORT = process.env.PORT || 5000;
 
 // Get server URL for logging
 const getServerUrl = () => {
