@@ -152,38 +152,6 @@ export const getLastItemCode = async () => {
   }
 };
 
-// Function to generate a unique equipment code with enhanced uniqueness
-export const generateUniqueEquipmentCode = async () => {
-  try {
-    // Get the last equipment code
-    const lastCode = await getLastItemCode();
-    
-    if (!lastCode) {
-      // If no equipment exists, start with EQ-00000001
-      return 'EQ-00000001';
-    }
-    
-    // Extract the numeric part and increment
-    const prefix = 'EQ-';
-    const lastNumber = parseInt(lastCode.replace(prefix, ''));
-    
-    if (isNaN(lastNumber)) {
-      // If parsing fails, generate a timestamp-based code with 8 digits
-      return `EQ-${Date.now().toString().slice(-8)}`;
-    }
-    
-    // Increment and pad with leading zeros (8 digits)
-    const newNumber = lastNumber + 1;
-    const paddedNumber = newNumber.toString().padStart(8, '0');
-    
-    return `${prefix}${paddedNumber}`;
-  } catch (error) {
-    console.error('Error generating equipment code:', error);
-    // Fallback to timestamp-based code with 8 digits
-    return `EQ-${Date.now().toString().slice(-8)}`;
-  }
-};
-
 // ดึงอุปกรณ์ทั้งหมด พร้อม dueDate (วันที่ต้องคืน) ถ้ามีการยืมที่ยังไม่คืน
 export const getAllEquipmentWithDueDate = async () => {
   try {

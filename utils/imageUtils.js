@@ -42,11 +42,9 @@ const repairImageStorage = multer.diskStorage({
       repairCode = req.repair_code;
     }
 
-    // If still no repair code, generate one with enhanced uniqueness
+    // If still no repair code, generate one
     if (!repairCode) {
-      const timestamp = Date.now().toString().slice(-6);
-      const randomNum = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
-      repairCode = `RP-${timestamp}-${randomNum}`;
+      repairCode = `RP${Date.now()}`;
     }
 
     // Get file index from request or generate one
@@ -57,7 +55,7 @@ const repairImageStorage = multer.diskStorage({
 
     const fileExtension = path.extname(file.originalname);
 
-    // Format: REPAIR_CODE_INDEX.ext (e.g., RP123456-123456_1.jpg, RP123456-123456_2.png)
+    // Format: REPAIR_CODE_INDEX.ext (e.g., RP12345_1.jpg, RP12345_2.png)
     const filename = `${repairCode}_${fileIndex}${fileExtension}`;
     console.log('[MULTER] Saving file:', filename, 'for repair code:', repairCode, 'original:', file.originalname);
     cb(null, filename);
