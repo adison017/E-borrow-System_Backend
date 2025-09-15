@@ -11,18 +11,30 @@ export const getAllEquipment = async (req, res) => {
     const results = await Equipment.getAllEquipmentWithDueDate();
     console.log('Total equipment found:', results.length);
     console.log('Equipment codes:', results.map(item => item.item_code));
-    const mapped = results.map(item => ({
-      ...item,
-      pic: getPicUrl(item.pic)
-    }));
+    const mapped = results.map(item => {
+      // Combine room information into a location field
+      let location = '';
+      if (item.room_name) {
+        location = item.room_name;
+        if (item.room_address) {
+          location += ` (${item.room_address})`;
+        }
+      } else if (item.room_address) {
+        location = item.room_address;
+      }
+
+      return {
+        ...item,
+        location: location,
+        pic: getPicUrl(item.pic)
+      };
+    });
     res.json(mapped);
   } catch (err) {
     console.error('Error in getAllEquipment:', err);
     res.status(500).json({ error: err.message });
   }
 };
-
-
 
 // Use item_code as canonical identifier for all CRUD
 export const getEquipmentByCode = async (req, res) => {
@@ -35,8 +47,21 @@ export const getEquipmentByCode = async (req, res) => {
       return res.status(404).json({ error: 'Equipment not found', item_code: req.params.item_code });
     }
     const item = results[0];
+    
+    // Combine room information into a location field
+    let location = '';
+    if (item.room_name) {
+      location = item.room_name;
+      if (item.room_address) {
+        location += ` (${item.room_address})`;
+      }
+    } else if (item.room_address) {
+      location = item.room_address;
+    }
+    
     const mapped = {
       ...item,
+      location: location,
       pic: getPicUrl(item.pic)
     };
     console.log('Returning equipment:', mapped);
