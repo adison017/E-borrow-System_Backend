@@ -368,8 +368,9 @@ export const createImportantDocumentsUpload = (borrowCode) => {
 export const uploadImportantDocumentsWithCustomName = (req, res, next) => {
   // Generate borrow code first
   function generateBorrowCode() {
-    const random = Math.floor(1000 + Math.random() * 9000);
-    return `BR-${random}`;
+    const timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
+    const random = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
+    return `BR-${timestamp}-${random}`;
   }
 
   const borrowCode = generateBorrowCode();
