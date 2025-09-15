@@ -82,16 +82,41 @@ export const createBorrow = async (req, res) => {
     borrow_code = req.generatedBorrowCode;
     console.log(`Using generated borrow_code from middleware: ${borrow_code}`);
   } else {
-    // Generate unique borrow code with timestamp and random component (enhanced)
-    function generateBorrowCode() {
-      const timestamp = Date.now().toString(); // Full timestamp
-      const random = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
-      // Take last 8 digits of timestamp for better uniqueness
-      const shortTimestamp = timestamp.slice(-8);
-      return `BR-${shortTimestamp}-${random}`;
+    // สุ่ม borrow_code
+    const generateBorrowCode = async () => {
+      let code;
+      let exists = true;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (exists && attempts < maxAttempts) {
+        // Use the last 6 digits of timestamp + 4-digit random number
+        const timestamp = Date.now();
+        const randomPart = Math.floor(1000 + Math.random() * 9000); // 4-digit random (1000-9999)
+        code = `BR-${String(timestamp).slice(-6)}${randomPart}`;
+
+        const [rows] = await db.query(
+          'SELECT borrow_code FROM borrow_transactions WHERE borrow_code = ?',
+          [code]
+        );
+        if (rows.length === 0) exists = false;
+        attempts++;
+      }
+
+      if (exists) {
+        throw new Error('Unable to generate unique borrow code after maximum attempts');
+      }
+
+      return code;
+    };
+
+    try {
+      borrow_code = await generateBorrowCode(); // ✅ ใช้ await
+      console.log(`Generated new borrow_code: ${borrow_code}`);
+    } catch (error) {
+      console.error('Error generating borrow code:', error);
+      return res.status(500).json({ message: 'ไม่สามารถสร้างรหัสการยืมได้', error: error.message });
     }
-    borrow_code = generateBorrowCode();
-    console.log(`Generated new borrow_code: ${borrow_code}`);
   }
 
   // ลบ logic ตรวจสอบรหัสซ้ำ (findByBorrowCode)
@@ -305,7 +330,7 @@ export const createBorrow = async (req, res) => {
         borrow_date,
         return_date,
         purpose
-      }, null, 'borrows', borrow_id);
+      }, null, 'borrow_transactions', borrow_id);
     } catch (logError) {
       console.error('Failed to log borrow creation:', logError);
     }
@@ -518,7 +543,7 @@ export const updateBorrowStatus = async (req, res) => {
         rejection_reason: rejection_reason || null,
         has_signature: !!signaturePath,
         has_handover_photo: !!handoverPhotoPath
-      }, { status: borrow.status }, 'borrows', id);
+      }, { status: borrow.status }, 'borrow_transactions', id);
     } catch (logError) {
       console.error('Failed to log status change:', logError);
     }

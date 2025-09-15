@@ -57,11 +57,9 @@ router.post('/upload-images', async (req, res, next) => {
       // Extract repair code from request body
       let repairCode = req.body.repair_code;
 
-      // If not in body, generate one with enhanced uniqueness
+      // If not in body, generate one
       if (!repairCode) {
-        const timestamp = Date.now().toString().slice(-6);
-        const randomNum = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
-        repairCode = `RP-${timestamp}-${randomNum}`;
+        repairCode = `RP${Date.now()}`;
       }
 
       try {
