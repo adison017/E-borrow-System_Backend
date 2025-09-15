@@ -82,10 +82,13 @@ export const createBorrow = async (req, res) => {
     borrow_code = req.generatedBorrowCode;
     console.log(`Using generated borrow_code from middleware: ${borrow_code}`);
   } else {
-    // สุ่ม borrow_code
+    // Generate unique borrow code with timestamp and random component (enhanced)
     function generateBorrowCode() {
-      const random = Math.floor(1000 + Math.random() * 9000);
-      return `BR-${random}`;
+      const timestamp = Date.now().toString(); // Full timestamp
+      const random = Math.floor(100000 + Math.random() * 900000); // 6-digit random number
+      // Take last 8 digits of timestamp for better uniqueness
+      const shortTimestamp = timestamp.slice(-8);
+      return `BR-${shortTimestamp}-${random}`;
     }
     borrow_code = generateBorrowCode();
     console.log(`Generated new borrow_code: ${borrow_code}`);
