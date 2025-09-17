@@ -315,7 +315,7 @@ class AuditLogger {
             else if (req.method === 'POST') actionType = 'borrow';
           }
           
-          // Log the operation only once
+          // Log the operation only once with error handling
           AuditLog.log({
             user_id,
             username,
@@ -346,4 +346,11 @@ class AuditLogger {
 // Create singleton instance
 const auditLogger = new AuditLogger();
 
+// Gracefully shutdown audit logger
+function shutdownAuditLogger() {
+  // Any cleanup code for audit logger can go here
+  console.log('Audit logger shutdown complete');
+}
+
+export { shutdownAuditLogger };
 export default auditLogger;
