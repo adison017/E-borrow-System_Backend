@@ -1,19 +1,16 @@
-import * as ReturnModel from '../models/returnModel.js';
+import { broadcastBadgeCounts } from '../index.js';
 import * as BorrowModel from '../models/borrowModel.js';
-import * as EquipmentModel from '../models/equipmentModel.js';
 import * as DamageLevelModel from '../models/damageLevelModel.js';
-import { updateProofImageAndPayStatus } from '../models/returnModel.js';
+import * as EquipmentModel from '../models/equipmentModel.js';
+import * as RepairRequest from '../models/repairRequestModel.js';
+import * as ReturnModel from '../models/returnModel.js';
 import {
-  updateSlipPendingByBorrowId,
-  approvePaymentByReturnId,
-  rejectSlipByReturnId,
-  getLatestReturnByBorrowId,
+    approvePaymentByReturnId,
+    rejectSlipByReturnId, updateProofImageAndPayStatus, updateSlipPendingByBorrowId
 } from '../models/returnModel.js';
 import User from '../models/userModel.js';
-import { sendLineNotify } from '../utils/lineNotify.js';
-import { broadcastBadgeCounts } from '../index.js';
-import * as RepairRequest from '../models/repairRequestModel.js';
 import auditLogger from '../utils/auditLogger.js';
+import { sendLineNotify } from '../utils/lineNotify.js';
 
 // Helper function for strict check
 function isLineNotifyEnabled(val) {
@@ -397,6 +394,17 @@ export const createReturn = async (req, res) => {
 
     res.status(201).json({ return_id, user_id: return_by });
   } catch (err) {
+    console.error('[createReturn] error object:', err);
+    // If the error looks like an unknown column in SQL, provide table column list to aid debugging
+    try {
+      if (err.message && err.message.toLowerCase().includes('unknown column')) {
+        const cols = await ReturnModel.getReturnsTableColumns();
+        console.error('[createReturn] returns table columns:', cols);
+        return res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message, returns_table_columns: cols });
+      }
+    } catch (innerErr) {
+      console.error('[createReturn] failed to fetch returns table columns:', innerErr);
+    }
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
   }
 };
