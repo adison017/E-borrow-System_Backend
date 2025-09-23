@@ -220,13 +220,39 @@ export const getAllReturns_pay = async (user_id = null) => {
 
 
 export const createReturn = async (borrow_id, return_date, return_by, user_id, fine_amount, damage_fine, late_fine, late_days, proof_image, status, notes, pay_status = 'pending', payment_method = null) => {
-  const [result] = await db.query(
-    `INSERT INTO returns (
-      borrow_id, return_date, return_by, user_id, fine_amount, damage_fine, late_fine, late_days, proof_image, status, notes, pay_status, payment_method, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [borrow_id, return_date, return_by, user_id, fine_amount, damage_fine, late_fine, late_days, proof_image, status, notes, pay_status, payment_method]
-  );
-  return result.insertId;
+  try {
+    const [result] = await db.query(
+      `INSERT INTO returns (
+        borrow_id, return_date, return_by, user_id, fine_amount, damage_fine, late_fine, late_days, proof_image, status, notes, pay_status, payment_method, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [borrow_id, return_date, return_by, user_id, fine_amount, damage_fine, late_fine, late_days, proof_image, status, notes, pay_status, payment_method]
+    );
+    return result.insertId;
+  } catch (err) {
+    // Re-throw with more context preserved
+    console.error('[createReturn] DB error:', err);
+    // Ensure we include SQL error details if present
+    const enhanced = new Error(err.sqlMessage || err.message || 'DB error');
+    enhanced.original = err;
+    throw enhanced;
+  }
+};
+
+// Helper: return list of columns for `returns` table to help debug schema mismatches
+export const getReturnsTableColumns = async () => {
+  try {
+    const [rows] = await db.query(
+      `SELECT COLUMN_NAME
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'returns'
+       ORDER BY ORDINAL_POSITION`,
+      [process.env.DB_NAME]
+    );
+    return rows.map(r => r.COLUMN_NAME);
+  } catch (err) {
+    console.error('[getReturnsTableColumns] error:', err);
+    return [];
+  }
 };
 
 export const updatePayStatus = async (return_id, pay_status) => {
