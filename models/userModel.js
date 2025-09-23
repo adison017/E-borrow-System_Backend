@@ -241,9 +241,9 @@ const User = {
       if (!userData || typeof userData !== 'object') {
         throw new Error('Invalid user data');
       }
-      // Default avatar to null if not provided
-      if (!('avatar' in userData)) {
-        userData.avatar = null;
+      // Set default avatar if not provided
+      if (!('avatar' in userData) || userData.avatar === null) {
+        userData.avatar = '/logo_it.png';
       }
       // If avatar is provided, only strip path if not a URL or not a root-relative path
       if (userData.avatar && !/^https?:\/\//.test(userData.avatar) && !userData.avatar.startsWith('/')) {
@@ -313,7 +313,7 @@ const User = {
           district || '',
           parish || '',
           postal_no || '',
-          avatar || null,
+          avatar || '/logo_it.png',
           Fullname,
           line_id || null, // เพิ่ม line_id
           typeof line_notify_enabled === 'undefined' || line_notify_enabled === null ? 0 : line_notify_enabled // default 0
