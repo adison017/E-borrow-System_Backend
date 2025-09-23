@@ -162,6 +162,12 @@ export const isCloudinaryUrl = (url) => {
   return url && url.includes('cloudinary.com');
 };
 
+// Function to upload damage photos
+export const uploadDamagePhotos = async (base64Data, borrowCode, itemCode, photoIndex) => {
+  const customName = `${borrowCode}_${itemCode}_damage_${photoIndex}`;
+  return await uploadBase64ToCloudinary(base64Data, 'e-borrow/return_damage', customName);
+};
+
 // Function to migrate local image to Cloudinary
 export const migrateLocalImageToCloudinary = async (localPath, folder, customName = null) => {
   try {
