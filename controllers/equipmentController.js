@@ -48,6 +48,9 @@ export const getEquipmentByCode = async (req, res) => {
     }
     const item = results[0];
     
+    // Get total borrow count
+    const totalBorrowCount = await Equipment.getEquipmentBorrowCount(req.params.item_code);
+    
     // Combine room information into a location field
     let location = '';
     if (item.room_name) {
@@ -62,7 +65,8 @@ export const getEquipmentByCode = async (req, res) => {
     const mapped = {
       ...item,
       location: location,
-      pic: getPicUrl(item.pic)
+      pic: getPicUrl(item.pic),
+      total_borrow_count: totalBorrowCount
     };
     console.log('Returning equipment:', mapped);
     res.json(mapped);
@@ -252,6 +256,29 @@ export const updateEquipmentStatus = async (req, res) => {
     res.json({ message: 'Equipment status updated' });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+export const getEquipmentBorrowHistory = async (req, res) => {
+  try {
+    const { item_code } = req.params;
+    console.log('Getting borrow history for equipment:', item_code);
+    
+    if (!item_code) {
+      return res.status(400).json({ error: 'item_code is required' });
+    }
+    
+    const history = await Equipment.getEquipmentBorrowHistory(item_code);
+    console.log('Borrow history found:', history.length, 'records');
+    
+    res.json(history);
+  } catch (err) {
+    console.error('Error in getEquipmentBorrowHistory:', err);
+    console.error('Stack trace:', err.stack);
+    res.status(500).json({ 
+      error: 'Failed to fetch borrow history',
+      details: err.message 
+    });
   }
 };
 

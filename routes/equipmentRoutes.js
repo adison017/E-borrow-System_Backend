@@ -207,6 +207,7 @@ const handleUploadWithFile = async (req, res, item_code) => {
 // Use item_code as canonical identifier for all CRUD routes
 router.get('/', equipmentController.getAllEquipment);
 router.get('/:item_code', equipmentController.getEquipmentByCode);
+router.get('/:item_code/borrow-history', equipmentController.getEquipmentBorrowHistory);
 router.post('/', equipmentController.addEquipment);
 router.put('/:item_id', equipmentController.updateEquipment);
 router.put('/:item_code/status', equipmentController.updateEquipmentStatus);
