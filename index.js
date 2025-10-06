@@ -10,6 +10,7 @@ import https from 'https';
 import fs from 'fs';
 import { Server as SocketIOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import os from 'os';
 
 // Rate limiting
 import rateLimit from 'express-rate-limit';
@@ -672,7 +673,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 65033;
+// For production deployment, use the HOST from environment variables
+// For local development, fallback to localhost if the specified HOST is not available
+const HOST = process.env.HOST || 'localhost';
 
 // Get server URL for logging
 const getServerUrl = () => {
@@ -753,6 +757,53 @@ process.on('SIGINT', () => {
   shutdown();
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Check if we're running on the actual university server by testing network interfaces
+const isUniversityServer = () => {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.address === '202.28.34.205') {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+// Simple fallback mechanism
+const startServerWithFallback = () => {
+  // First, try to start on the configured host
+  server.listen(PORT, HOST, (err) => {
+    if (err) {
+      console.error(`Failed to bind to ${HOST}:${PORT}`);
+      console.error('Error details:', err.message);
+      
+      // If configured for university server but not actually on it, fallback to localhost
+      if (HOST === '202.28.34.205' && !isUniversityServer()) {
+        console.log('Configured for university server but not running on it. Falling back to localhost...');
+        server.listen(PORT, 'localhost', (err) => {
+          if (err) {
+            console.error('Failed to bind to localhost as well.');
+            if (err.code === 'EADDRINUSE') {
+              console.log('Port in use. Please kill the process or use a different port.');
+            }
+            process.exit(1);
+          } else {
+            console.log(`Server running on localhost:${PORT} (fallback mode)`);
+          }
+        });
+      } else if (err.code === 'EADDRINUSE') {
+        console.log('Port in use. Please kill the process or use a different port.');
+        process.exit(1);
+      } else {
+        console.error('Unable to start server. Exiting...');
+        process.exit(1);
+      }
+    } else {
+      console.log(`Server running on ${HOST}:${PORT}`);
+    }
+  });
+};
+
+// Start the server with fallback mechanism
+startServerWithFallback();

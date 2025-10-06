@@ -205,6 +205,7 @@ export const getAllReturns_pay = async (user_id = null) => {
         fine_amount: itemCondition ? itemCondition.fine_amount : 0,
         damage_level_id: itemCondition ? itemCondition.damage_level_id : null,
         damage_note: itemCondition ? itemCondition.damage_note : '',
+        damage_photos: itemCondition ? itemCondition.damage_photos : [] // Add damage photos
       });
     });
     
@@ -294,11 +295,11 @@ export const updateProofImageAndPayStatus = async (borrow_id, proof_image, cloud
 };
 
 // เพิ่มฟังก์ชันสำหรับบันทึก return_items
-export const createReturnItem = async (return_id, item_id, damage_level_id, damage_note, fine_amount) => {
+export const createReturnItem = async (return_id, item_id, damage_level_id, damage_note, fine_amount, damage_photos = null) => {
   const [result] = await db.query(
-    `INSERT INTO return_items (return_id, item_id, damage_level_id, damage_note, fine_amount, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    [return_id, item_id, damage_level_id, damage_note, fine_amount]
+    `INSERT INTO return_items (return_id, item_id, damage_level_id, damage_note, fine_amount, damage_photos, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    [return_id, item_id, damage_level_id, damage_note, fine_amount, damage_photos ? JSON.stringify(damage_photos) : null]
   );
   return result.insertId;
 };
@@ -312,7 +313,19 @@ export const getReturnItemsByReturnId = async (return_id) => {
      WHERE ri.return_id = ?`,
     [return_id]
   );
-  return rows;
+  // Parse damage_photos JSON if exists
+  return rows.map(row => {
+    if (row.damage_photos) {
+      try {
+        row.damage_photos = JSON.parse(row.damage_photos);
+      } catch (e) {
+        row.damage_photos = [];
+      }
+    } else {
+      row.damage_photos = [];
+    }
+    return row;
+  });
 };
 
 // Helper to get latest return by borrow_id

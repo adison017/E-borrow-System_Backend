@@ -1173,6 +1173,20 @@ const userController = {
     }
   },
 
+  getUserByUserCode: async (req, res) => {
+    try {
+      const userCode = req.params.user_code;
+      const user = await User.findByUserCode(userCode);
+      res.json(user);
+    } catch (err) {
+      console.error('Error fetching user by user code:', err);
+      res.status(500).json({
+        message: 'An error occurred while fetching user',
+        error: err.message
+      });
+    }
+  },
+
   getUserById: async (req, res) => {
     try {
       const userId = req.params.id;

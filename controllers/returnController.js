@@ -105,12 +105,15 @@ export const createReturn = async (req, res) => {
     // 1.5 บันทึก return_items ทีละชิ้น
     if (item_conditions && typeof item_conditions === 'object') {
       for (const [item_id, cond] of Object.entries(item_conditions)) {
+        // Handle damage photos if they exist
+        const damagePhotos = cond.damage_photos || [];
         await ReturnModel.createReturnItem(
           return_id,
           item_id,
           cond.damageLevelId || null,
           cond.note || '',
-          cond.fine_amount || 0
+          cond.fine_amount || 0,
+          damagePhotos.length > 0 ? damagePhotos : null
         );
       }
     }
@@ -413,10 +416,39 @@ export const getSuccessBorrows = async (req, res) => {
   try {
     console.log('=== getSuccessBorrows API Debug ===');
     const borrows = await BorrowModel.getBorrowsByStatus(['completed', 'rejected']);
-
-
-
-    res.json(borrows);
+    
+    // Enrich borrows with return items that contain damage photos
+    const enrichedBorrows = await Promise.all(borrows.map(async (borrow) => {
+      try {
+        // Get returns for this borrow
+        const [returns] = await ReturnModel.getReturnsByBorrowId(borrow.borrow_id);
+        
+        if (returns && returns.length > 0) {
+          // Get the latest return (most recent)
+          const latestReturn = returns.reduce((latest, current) => {
+            const latestDate = new Date(latest.return_date || latest.created_at);
+            const currentDate = new Date(current.return_date || current.created_at);
+            return currentDate > latestDate ? current : latest;
+          }, returns[0]);
+          
+          // Get return items with damage photos for the latest return
+          const returnItems = await ReturnModel.getReturnItemsByReturnId(latestReturn.return_id);
+          
+          // Add return items to borrow object
+          return {
+            ...borrow,
+            return_items: returnItems || []
+          };
+        }
+      } catch (err) {
+        console.error(`Error enriching borrow ${borrow.borrow_id}:`, err);
+      }
+      
+      // Return borrow as is if there's an error or no returns
+      return borrow;
+    }));
+    
+    res.json(enrichedBorrows);
   } catch (err) {
     console.error('Error in getSuccessBorrows:', err);
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
@@ -451,12 +483,14 @@ export const updatePayStatus = async (req, res) => {
            item_id: item.item_id,
            damage_level_id: item.damage_level_id,
            damage_note: item.damage_note,
-           fine_amount: item.fine_amount
+           fine_amount: item.fine_amount,
+           damage_photos: item.damage_photos // Add damage photos
          });
          itemConditionsMap[item.item_id] = {
            damageLevelId: item.damage_level_id,
            note: item.damage_note,
-           fine_amount: item.fine_amount
+           fine_amount: item.fine_amount,
+           damage_photos: item.damage_photos || [] // Add damage photos
          };
       }
       console.log(`[PAY] Final itemConditionsMap:`, itemConditionsMap);
@@ -642,8 +676,38 @@ export const getReturnsByBorrowId = async (req, res) => {
   const { borrow_id } = req.params;
   try {
     const [rows] = await ReturnModel.getReturnsByBorrowId(borrow_id);
+    
+    // If we have returns, enrich them with handover_photo from borrow_transactions and return items
+    if (rows && rows.length > 0) {
+      // Get the borrow transaction to get handover_photo
+      const borrow = await BorrowModel.getBorrowById(borrow_id);
+      
+      // Get return items with damage photos for each return
+      const enrichedRows = await Promise.all(rows.map(async (row) => {
+        // Get return items for this return
+        const returnItems = await ReturnModel.getReturnItemsByReturnId(row.return_id);
+        
+        // Log for debugging
+        console.log(`Return ID: ${row.return_id}, Return Items:`, returnItems);
+        
+        // Add handover_photo and return items to each return record
+        return {
+          ...row,
+          handover_photo: borrow?.handover_photo || row.handover_photo,
+          signature_image: borrow?.signature_image || row.signature_image,
+          return_items: returnItems || []
+        };
+      }));
+      
+      // Log for debugging
+      console.log('Enriched Rows:', enrichedRows);
+      
+      return res.json(enrichedRows);
+    }
+    
     res.json(rows);
   } catch (err) {
+    console.error('Error in getReturnsByBorrowId:', err);
     res.status(500).json({ message: 'เกิดข้อผิดพลาด', error: err.message });
   }
 };
