@@ -152,6 +152,22 @@ export const getLastItemCode = async () => {
   }
 };
 
+// Get total borrow count for equipment
+export const getEquipmentBorrowCount = async (item_code) => {
+  try {
+    const [rows] = await connection.query(`
+      SELECT COUNT(*) as total_borrow_count
+      FROM borrow_transactions bt
+      JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
+      JOIN equipment e ON bi.item_id = e.item_id
+      WHERE e.item_code = ?
+    `, [item_code]);
+    return rows[0]?.total_borrow_count || 0;
+  } catch (error) {
+    throw error;
+  }
+};
+
 // ดึงอุปกรณ์ทั้งหมด พร้อม dueDate (วันที่ต้องคืน) ถ้ามีการยืมที่ยังไม่คืน
 export const getAllEquipmentWithDueDate = async () => {
   try {
@@ -178,6 +194,225 @@ export const getAllEquipmentWithDueDate = async () => {
     `);
     return rows;
   } catch (error) {
+    throw error;
+  }
+};
+
+// ดึงประวัติการยืมของครุภัณฑ์
+export const getEquipmentBorrowHistory = async (item_code) => {
+  try {
+    console.log('Fetching borrow history for item_code:', item_code);
+    
+    // First, get the equipment item_id
+    const [equipmentRows] = await connection.query(
+      'SELECT item_id FROM equipment WHERE item_code = ?', 
+      [item_code]
+    );
+    
+    if (equipmentRows.length === 0) {
+      console.log('Equipment not found for item_code:', item_code);
+      return [];
+    }
+    
+    const equipmentItemId = equipmentRows[0].item_id;
+    console.log('Found equipment item_id:', equipmentItemId);
+    
+    // Get borrow history
+    const [rows] = await connection.query(`
+      SELECT 
+        bt.borrow_id,
+        bt.borrow_code,
+        bt.borrow_date,
+        bt.return_date as due_date,
+        bt.status,
+        bt.purpose,
+        bt.signature_image,
+        bt.handover_photo,
+        bt.created_at,
+        bt.updated_at,
+        bt.user_id,
+        bi.quantity,
+        e.name as equipment_name,
+        e.item_code,
+        e.pic as equipment_pic
+      FROM borrow_transactions bt
+      JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
+      JOIN equipment e ON bi.item_id = e.item_id
+      WHERE bi.item_id = ?
+      ORDER BY bt.borrow_date DESC
+    `, [equipmentItemId]);
+    
+    console.log('Found', rows.length, 'borrow records');
+    
+    // Get unique user IDs to fetch user data
+    const userIds = [...new Set(rows.map(row => row.user_id).filter(Boolean))];
+    console.log('User IDs to fetch:', userIds);
+    
+    // Fetch user data using existing API pattern
+    let userData = {};
+    if (userIds.length > 0) {
+      try {
+        // Use the same query pattern as other working endpoints
+        const [userRows] = await connection.query(
+          'SELECT * FROM users WHERE user_id IN (' + userIds.map(() => '?').join(',') + ')',
+          userIds
+        );
+        
+        console.log('Raw user data:', userRows);
+        
+        userData = userRows.reduce((acc, user) => {
+          acc[user.user_id] = {
+            user_id: user.user_id,
+            name: user.Fullname || user.fullname || user.name || user.username || 'ไม่ระบุ',
+            email: user.email || user.Email || null,
+            department: user.department || user.Department || null,
+            position: user.position || user.Position || user.role || null,
+            avatar: user.avatar || user.Avatar || user.profile_picture || null
+          };
+          return acc;
+        }, {});
+        
+        console.log('Processed user data:', userData);
+      } catch (userError) {
+        console.warn('Could not fetch user data:', userError.message);
+        console.warn('Error details:', userError);
+      }
+    }
+    
+    // Group by borrow_id to handle multiple equipment items
+    const borrowMap = new Map();
+    
+    rows.forEach(row => {
+      if (!borrowMap.has(row.borrow_id)) {
+        // Calculate overdue status
+        let finalStatus = row.status;
+        if ((row.status === 'approved' || row.status === 'carry') && row.due_date) {
+          const currentDate = new Date();
+          const dueDate = new Date(row.due_date);
+          if (currentDate > dueDate) {
+            finalStatus = 'overdue';
+          }
+        }
+        
+        const user = userData[row.user_id] || {};
+        
+        borrowMap.set(row.borrow_id, {
+          borrow_id: row.borrow_id,
+          borrow_code: row.borrow_code,
+          borrow_date: row.borrow_date,
+          due_date: row.due_date,
+          status: finalStatus,
+          purpose: row.purpose,
+          signature_image: row.signature_image,
+          handover_photo: row.handover_photo,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          borrower: {
+            user_id: row.user_id,
+            name: user.name || 'ไม่ระบุ',
+            email: user.email || null,
+            department: user.department || null,
+            position: user.position || null,
+            avatar: user.avatar || null
+          },
+          equipment: [],
+          important_documents: [],
+          return_items: []
+        });
+      }
+      
+      // Add equipment to the borrow record
+      borrowMap.get(row.borrow_id).equipment.push({
+        item_code: row.item_code,
+        name: row.equipment_name,
+        quantity: row.quantity || 1,
+        pic: row.equipment_pic
+      });
+    });
+    
+    // Fetch important documents for each borrow transaction
+    const borrowIds = Array.from(borrowMap.keys());
+    if (borrowIds.length > 0) {
+      try {
+        const [documentRows] = await connection.query(`
+          SELECT borrow_id, file_name, original_name, file_path, file_type, file_size, upload_date
+          FROM borrow_documents 
+          WHERE borrow_id IN (${borrowIds.map(() => '?').join(',')})
+          ORDER BY upload_date ASC
+        `, borrowIds);
+        
+        console.log('Found', documentRows.length, 'documents');
+        
+        // Group documents by borrow_id
+        documentRows.forEach(doc => {
+          if (borrowMap.has(doc.borrow_id)) {
+            borrowMap.get(doc.borrow_id).important_documents.push({
+              file_name: doc.file_name,
+              original_name: doc.original_name,
+              file_path: doc.file_path,
+              file_type: doc.file_type,
+              file_size: doc.file_size,
+              upload_date: doc.upload_date
+            });
+          }
+        });
+      } catch (docError) {
+        console.warn('Could not fetch documents:', docError.message);
+      }
+      
+      // Fetch return items with damage photos for completed transactions
+      try {
+        const [returnRows] = await connection.query(`
+          SELECT 
+            ri.borrow_id,
+            ri.item_id,
+            ri.damage_level,
+            ri.damage_photos,
+            e.name as equipment_name,
+            e.item_code
+          FROM return_items ri
+          JOIN equipment e ON ri.item_id = e.item_id
+          WHERE ri.borrow_id IN (${borrowIds.map(() => '?').join(',')})
+        `, borrowIds);
+        
+        console.log('Found', returnRows.length, 'return items');
+        
+        // Group return items by borrow_id
+        returnRows.forEach(returnItem => {
+          if (borrowMap.has(returnItem.borrow_id)) {
+            let damagePhotos = [];
+            if (returnItem.damage_photos) {
+              try {
+                damagePhotos = JSON.parse(returnItem.damage_photos);
+              } catch (e) {
+                console.warn('Could not parse damage_photos:', returnItem.damage_photos);
+                damagePhotos = [];
+              }
+            }
+            
+            borrowMap.get(returnItem.borrow_id).return_items.push({
+              item_id: returnItem.item_id,
+              equipment_name: returnItem.equipment_name,
+              item_code: returnItem.item_code,
+              damage_level: returnItem.damage_level,
+              damage_photos: damagePhotos
+            });
+          }
+        });
+      } catch (returnError) {
+        console.warn('Could not fetch return items:', returnError.message);
+      }
+    }
+    
+    const formattedHistory = Array.from(borrowMap.values());
+    
+    console.log('Formatted history:', formattedHistory.length, 'records');
+    console.log('Sample record:', formattedHistory[0]);
+    console.log('Sample borrower data:', formattedHistory[0]?.borrower);
+    return formattedHistory;
+  } catch (error) {
+    console.error('getEquipmentBorrowHistory - Error:', error);
+    console.error('Stack trace:', error.stack);
     throw error;
   }
 };
