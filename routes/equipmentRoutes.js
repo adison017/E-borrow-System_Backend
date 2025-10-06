@@ -1,18 +1,22 @@
 import express from 'express';
-import fs from 'fs';
+import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as equipmentController from '../controllers/equipmentController.js';
 import authMiddleware from '../middleware/authMiddleware.js';
-import { uploadEquipmentImage, createEquipmentUploadWithItemCode, handleCloudinaryUpload, cloudinaryUtils } from '../utils/cloudinaryUtils.js';
-import { uploadEquipmentImage as uploadEquipmentToCloudinary } from '../utils/cloudinaryUploadUtils.js';
-import multer from 'multer';
 import auditLogger from '../utils/auditLogger.js';
+import { uploadEquipmentImage as uploadEquipmentToCloudinary } from '../utils/cloudinaryUploadUtils.js';
+import { createEquipmentUploadWithItemCode } from '../utils/cloudinaryUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// Temporary public diagnostic route (placed BEFORE auth middleware)
+// NOTE: This endpoint is added only for quick verification on deployed servers
+// where you may not have a JWT handy. Remove or protect this in production.
+router.get('/public/borrow-history/:item_code', equipmentController.getEquipmentBorrowHistory);
 
 // Protect all equipment routes
 router.use(authMiddleware);
