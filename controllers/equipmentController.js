@@ -26,7 +26,10 @@ export const getAllEquipment = async (req, res) => {
       return {
         ...item,
         location: location,
-        pic: getPicUrl(item.pic)
+        pic: getPicUrl(item.pic),
+        room_name: item.room_name || null,
+        room_image_url: item.room_image_url || null,
+        room_address: item.room_address || null
       };
     });
     res.json(mapped);
@@ -66,7 +69,10 @@ export const getEquipmentByCode = async (req, res) => {
       ...item,
       location: location,
       pic: getPicUrl(item.pic),
-      total_borrow_count: totalBorrowCount
+      total_borrow_count: totalBorrowCount,
+      room_name: item.room_name || null,
+      room_image_url: item.room_image_url || null,
+      room_address: item.room_address || null
     };
     console.log('Returning equipment:', mapped);
     res.json(mapped);
@@ -277,6 +283,29 @@ export const getEquipmentBorrowHistory = async (req, res) => {
     console.error('Stack trace:', err.stack);
     res.status(500).json({ 
       error: 'Failed to fetch borrow history',
+      details: err.message 
+    });
+  }
+};
+
+export const getEquipmentRepairHistory = async (req, res) => {
+  try {
+    const { item_code } = req.params;
+    console.log('Getting repair history for equipment:', item_code);
+    
+    if (!item_code) {
+      return res.status(400).json({ error: 'item_code is required' });
+    }
+    
+    const history = await Equipment.getEquipmentRepairHistory(item_code);
+    console.log('Repair history found:', history.length, 'records');
+    
+    res.json(history);
+  } catch (err) {
+    console.error('Error in getEquipmentRepairHistory:', err);
+    console.error('Stack trace:', err.stack);
+    res.status(500).json({ 
+      error: 'Failed to fetch repair history',
       details: err.message 
     });
   }

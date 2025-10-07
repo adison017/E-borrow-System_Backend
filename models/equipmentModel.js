@@ -239,6 +239,7 @@ export const getEquipmentBorrowHistory = async (item_code) => {
       JOIN borrow_items bi ON bt.borrow_id = bi.borrow_id
       JOIN equipment e ON bi.item_id = e.item_id
       WHERE bi.item_id = ?
+        AND bt.status IN ('pending','pending_approval','approved','rejected','carry','completed','waiting_payment')
       ORDER BY bt.borrow_date DESC
     `, [equipmentItemId]);
     
@@ -413,6 +414,74 @@ export const getEquipmentBorrowHistory = async (item_code) => {
   } catch (error) {
     console.error('getEquipmentBorrowHistory - Error:', error);
     console.error('Stack trace:', error.stack);
+    throw error;
+  }
+};
+
+// ดึงประวัติการซ่อมของครุภัณฑ์
+export const getEquipmentRepairHistory = async (item_code) => {
+  try {
+    console.log('Fetching repair history for item_code:', item_code);
+    
+    const [rows] = await connection.query(`
+      SELECT 
+        rr.id,
+        rr.repair_code,
+        rr.user_id,
+        rr.item_id,
+        rr.problem_description,
+        rr.request_date,
+        rr.estimated_cost,
+        rr.status,
+        rr.pic_filename,
+        rr.budget,
+        rr.responsible_person,
+        rr.approval_date,
+        rr.rejection_reason,
+        rr.inspection_notes,
+        e.item_code as equipment_code,
+        e.name as equipment_name,
+        e.category as equipment_category,
+        e.pic as equipment_pic,
+        u.Fullname as requester_name,
+        u.avatar
+      FROM repair_requests rr
+      JOIN equipment e ON rr.item_id = e.item_id
+      LEFT JOIN users u ON rr.user_id = u.user_id
+      WHERE e.item_code = ?
+      ORDER BY rr.request_date DESC
+    `, [item_code]);
+    
+    console.log('Found', rows.length, 'repair records');
+    
+    const formattedHistory = rows.map(row => ({
+      id: row.id,
+      repair_code: row.repair_code,
+      user_id: row.user_id,
+      item_id: row.item_id,
+      problem_description: row.problem_description,
+      request_date: row.request_date,
+      estimated_cost: row.estimated_cost,
+      status: row.status,
+      pic_filename: row.pic_filename,
+      budget: row.budget,
+      responsible_person: row.responsible_person,
+      approval_date: row.approval_date,
+      rejection_reason: row.rejection_reason,
+      inspection_notes: row.inspection_notes,
+      equipment_code: row.equipment_code,
+      equipment_name: row.equipment_name,
+      equipment_category: row.equipment_category,
+      equipment_pic: row.equipment_pic,
+      requester: {
+        name: row.requester_name || 'ไม่ระบุ',
+        avatar: row.avatar
+      }
+    }));
+    
+    return formattedHistory;
+  } catch (error) {
+    console.error('getEquipmentRepairHistory - Error:', error);
     throw error;
   }
 };
