@@ -100,8 +100,23 @@ export const addEquipment = async (req, res) => {
     // ใช้ item_code ที่ user กรอก
     data.item_code = data.item_code.trim();
 
+    // Normalize pic: support JSON array of URLs without adding localhost prefix incorrectly
     if (data.pic && typeof data.pic === 'string') {
-      if (!data.pic.startsWith('http')) {
+      let parsedArray = null;
+      try {
+        const parsed = JSON.parse(data.pic);
+        if (Array.isArray(parsed)) parsedArray = parsed;
+      } catch (e) {}
+
+      if (parsedArray) {
+        const normalized = parsedArray.map(u => {
+          if (typeof u !== 'string' || !u) return u;
+          if (u.startsWith('http')) return u; // Keep Cloudinary or remote URLs
+          const clean = u.replace(/^\/?uploads\//, '');
+          return `http://localhost:65033/uploads/${clean}`;
+        });
+        data.pic = JSON.stringify(normalized);
+      } else if (!data.pic.startsWith('http')) {
         data.pic = `http://localhost:65033/uploads/${data.pic.replace(/^\/?uploads\//, '')}`;
       }
     }
@@ -166,10 +181,28 @@ export const updateEquipment = async (req, res) => {
 
     console.log('updateEquipment - New item code:', data.item_code);
 
-    // Handle image upload if provided
+    // Handle image upload if provided (base64)
     if (data.pic && data.pic.startsWith('data:image')) {
       const imagePath = await saveBase64Image(data.pic, data.item_code);
       data.pic = imagePath;
+    }
+
+    // Normalize pic URLs when updating: support JSON array of URLs
+    if (data.pic && typeof data.pic === 'string') {
+      let parsedArray = null;
+      try {
+        const parsed = JSON.parse(data.pic);
+        if (Array.isArray(parsed)) parsedArray = parsed;
+      } catch (e) {}
+      if (parsedArray) {
+        const normalized = parsedArray.map(u => {
+          if (typeof u !== 'string' || !u) return u;
+          if (u.startsWith('http')) return u; // Keep Cloudinary or remote URLs
+          const clean = u.replace(/^\/?uploads\//, '');
+          return `http://localhost:65033/uploads/${clean}`;
+        });
+        data.pic = JSON.stringify(normalized);
+      }
     }
 
     // Set default values for null fields

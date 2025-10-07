@@ -41,9 +41,23 @@ const createCloudinaryStorage = (folder, allowedFormats = ['jpg', 'jpeg', 'png',
     // สร้าง params สำหรับ CloudinaryStorage
     const params = {
       folder: folder,
-      public_id: customPublicId ? () => customPublicId : undefined,
       resource_type: resourceType
     };
+
+    // สร้าง unique public_id สำหรับแต่ละรูป
+    if (customPublicId) {
+      params.public_id = (req, file) => {
+        const timestamp = Date.now();
+        const randomSuffix = Math.floor(Math.random() * 10000);
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        
+        // สร้าง unique identifier โดยรวม customPublicId + timestamp + random
+        const uniqueId = `${customPublicId}_${timestamp}_${randomSuffix}`;
+        console.log(`📝 สร้าง unique public_id: ${uniqueId} สำหรับไฟล์: ${file.originalname}`);
+        
+        return uniqueId;
+      };
+    }
 
     // เพิ่ม transformation ตาม resource_type
     if (resourceType === 'image') {

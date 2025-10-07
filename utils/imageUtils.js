@@ -133,7 +133,26 @@ export const uploadImportantDocuments = multer({
 export const getPicUrl = (pic) => {
   if (!pic) return null;
 
-  if (pic.startsWith('http')) {
+  // If pic is a JSON array string, normalize each entry and return JSON string
+  if (typeof pic === 'string') {
+    try {
+      const parsed = JSON.parse(pic);
+      if (Array.isArray(parsed)) {
+        const normalized = parsed.map(u => {
+          if (typeof u !== 'string' || !u) return u;
+          if (u.startsWith('http')) return u;
+          const clean = u.startsWith('/') ? u.slice(1) : u;
+          if (clean.includes('repair/')) return `http://localhost:65033/${clean}`;
+          return `http://localhost:65033/uploads/${clean}`;
+        });
+        return JSON.stringify(normalized);
+      }
+    } catch (e) {
+      // Not a JSON array, continue
+    }
+  }
+
+  if (typeof pic === 'string' && pic.startsWith('http')) {
     return pic;
   }
 
