@@ -25,41 +25,19 @@ router.use(authMiddleware);
 router.post('/upload', async (req, res) => {
   try {
     console.log('[UPLOAD] Request received');
+    console.log('[UPLOAD] Query params:', req.query);
 
-    // Get item_code from query parameter first
-    let { item_code } = req.query;
+    // Get item_code from query parameter
+    const { item_code } = req.query;
 
-    // If not in query, try to get from form data
     if (!item_code) {
-      // Create a multer instance to parse form data
-      const parseMulter = multer().fields([
-        { name: 'image', maxCount: 1 },
-        { name: 'item_code', maxCount: 1 }
-      ]);
-
-      parseMulter(req, res, (err) => {
-        if (err) {
-          console.error('[UPLOAD] Form parsing error:', err);
-          return res.status(400).json({ error: 'Form data parsing failed', details: err.message });
-        }
-
-        // Get item_code from form data
-        item_code = req.body.item_code;
-
-        if (!item_code) {
-          console.log('[UPLOAD] Missing item_code in both query and form data');
-          return res.status(400).json({
-            error: 'item_code is required. Send as query parameter (?item_code=EQ-008) or form data (item_code: EQ-008)'
-          });
-        }
-
-        // Continue with upload using the parsed file
-        handleUploadWithFile(req, res, item_code);
+      console.log('[UPLOAD] Missing item_code in query parameter');
+      return res.status(400).json({
+        error: 'item_code is required as query parameter (?item_code=EQ-008)'
       });
-      return;
     }
 
-    // If item_code is in query, handle upload directly
+    // Handle upload directly with item_code from query
     handleUpload(req, res, item_code);
 
   } catch (error) {
